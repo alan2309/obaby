@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/common/LoginScreen';
 import AdminStack from './AdminStack';
 import SalesmanStack from './SalesmanStack';
-import CustomerStack from './CustomerStack';
+// import CustomerStack from './CustomerStack';
 import LoadingScreen from '../screens/common/LoadingScreen';
 
 const Stack = createStackNavigator();
@@ -35,8 +35,8 @@ const AppNavigator: React.FC = () => {
           <Stack.Screen name="AdminStack" component={AdminStack} />
         ) : user.role === 'salesman' ? (
           <Stack.Screen name="SalesmanStack" component={SalesmanStack} />
-        ) : user.role === 'customer' ? (
-          <Stack.Screen name="CustomerStack" component={CustomerStack} />
+        // ) : user.role === 'customer' ? (
+        //   <Stack.Screen name="CustomerStack" component={CustomerStack} />
         ) : (
           // Fallback for unknown roles
           <Stack.Screen name="Login" component={LoginScreen} />

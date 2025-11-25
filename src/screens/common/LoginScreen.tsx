@@ -1,52 +1,65 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, TextInput, Button, Card, SegmentedButtons } from 'react-native-paper';
+import { Text, TextInput, Button, Card, HelperText } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
-import { USER_ROLES, scaleSize, platformStyle, isTablet } from '../../utils/constants';
+import { scaleSize, platformStyle, isTablet } from '../../utils/constants';
 
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<'customer' | 'salesman'>('customer');
-  const [isRegistering, setIsRegistering] = useState(false);
+  // const [name, setName] = useState('');
+  // const [phone, setPhone] = useState('');
+  // const [city, setCity] = useState('');
+  // const [salesmanId, setSalesmanId] = useState('');
+  // const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
 
-  const { login, register } = useAuth();
+  const { login /*, register*/ } = useAuth();
 
   const handleSubmit = async () => {
+    setError('');
+    setEmailError('');
+
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
 
-    if (isRegistering && (!name || !phone)) {
-      setError('Please fill in all fields');
-      return;
-    }
-
     setLoading(true);
-    setError('');
 
     try {
-      if (isRegistering) {
-        await register(email, password, {
-          name,
-          email,
-          phone,
-          role,
-          approved: role === USER_ROLES.CUSTOMER ? false : true,
-        });
-      } else {
-        await login(email, password);
-      }
+      // Registration disabled
+      // if (isRegistering) { ... } 
+
+      await login(email, password);
     } catch (err: any) {
-      setError(err.message);
+      const errorMessage = err.message;
+      setError(errorMessage);
+
+      if (errorMessage.includes('already registered')) {
+        setEmailError('Email already in use');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  // const resetForm = () => {
+  //   setEmail('');
+  //   setPassword('');
+  //   setName('');
+  //   setPhone('');
+  //   setCity('');
+  //   setSalesmanId('');
+  //   setError('');
+  //   setEmailError('');
+  // };
+
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    if (emailError) setEmailError('');
   };
 
   return (
@@ -54,65 +67,52 @@ const LoginScreen: React.FC = () => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <Card style={styles.card}>
           <Card.Content>
-            <Text variant="headlineMedium" style={styles.title}>
-              {isRegistering ? 'Create Account' : 'Business Manager'}
-            </Text>
-            
-            {error ? (
-              <Text style={styles.error}>{error}</Text>
-            ) : null}
 
-            {isRegistering && (
-              <>
-                <TextInput
-                  label="Full Name"
-                  value={name}
-                  onChangeText={setName}
-                  style={styles.input}
-                  mode="outlined"
-                />
-                <TextInput
-                  label="Phone Number"
-                  value={phone}
-                  onChangeText={setPhone}
-                  style={styles.input}
-                  mode="outlined"
-                  keyboardType="phone-pad"
-                />
-                <SegmentedButtons
-                  value={role}
-                  onValueChange={(value) => setRole(value as 'customer' | 'salesman')}
-                  buttons={[
-                    { value: 'customer', label: 'Customer' },
-                    { value: 'salesman', label: 'Salesman' },
-                  ]}
-                  style={styles.segment}
-                />
-              </>
+            <Text variant="headlineMedium" style={styles.title}>
+              Business Manager
+            </Text>
+
+            <Text variant="bodyMedium" style={styles.subtitle}>
+              Sign in to your account
+            </Text>
+
+            {error && !emailError && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.error}>{error}</Text>
+              </View>
             )}
 
+            {/* REGISTRATION FORM COMMENTED OUT */}
+
             <TextInput
-              label="Email"
+              label="Email *"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={handleEmailChange}
               style={styles.input}
               mode="outlined"
               autoCapitalize="none"
               keyboardType="email-address"
+              placeholder="Enter your email address"
+              disabled={loading}
+              error={!!emailError}
             />
+
+            {emailError ? (
+              <HelperText type="error" visible={true}>{emailError}</HelperText>
+            ) : null}
+
             <TextInput
-              label="Password"
+              label="Password *"
               value={password}
               onChangeText={setPassword}
               style={styles.input}
               mode="outlined"
               secureTextEntry
+              placeholder="Enter your password"
+              disabled={loading}
             />
 
             <Button
@@ -123,21 +123,17 @@ const LoginScreen: React.FC = () => {
               style={styles.button}
               contentStyle={styles.buttonContent}
             >
-              {isRegistering ? 'Create Account' : 'Sign In'}
+              Sign In
             </Button>
 
-            <View style={styles.switchContainer}>
-              <Text variant="bodyMedium">
-                {isRegistering ? 'Already have an account?' : "Don't have an account?"}
+            {/* REGISTRATION SWITCH REMOVED */}
+
+            <View style={styles.noteContainer}>
+              <Text style={styles.noteText}>
+                💡 Only administrators can create accounts.
               </Text>
-              <Button
-                mode="text"
-                onPress={() => setIsRegistering(!isRegistering)}
-                compact
-              >
-                {isRegistering ? 'Sign In' : 'Create Account'}
-              </Button>
             </View>
+
           </Card.Content>
         </Card>
       </ScrollView>
@@ -163,14 +159,17 @@ const styles = StyleSheet.create({
   },
   title: {
     textAlign: 'center',
-    marginBottom: scaleSize(24),
+    marginBottom: scaleSize(8),
     color: '#3B3B3B',
   },
-  input: {
-    marginBottom: scaleSize(16),
+  subtitle: {
+    textAlign: 'center',
+    marginBottom: scaleSize(24),
+    color: '#666',
+    fontSize: scaleSize(14),
   },
-  segment: {
-    marginBottom: scaleSize(16),
+  input: {
+    marginBottom: scaleSize(4),
   },
   button: {
     marginTop: scaleSize(8),
@@ -179,18 +178,32 @@ const styles = StyleSheet.create({
   buttonContent: {
     paddingVertical: scaleSize(6),
   },
-  switchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: scaleSize(16),
-    flexWrap: 'wrap',
+  errorContainer: {
+    backgroundColor: '#FFE5E5',
+    padding: scaleSize(12),
+    borderRadius: 8,
+    marginBottom: scaleSize(16),
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF5252',
   },
   error: {
-    color: 'red',
-    textAlign: 'center',
-    marginBottom: scaleSize(16),
+    color: '#D32F2F',
     fontSize: scaleSize(14),
+    textAlign: 'center',
+  },
+  noteContainer: {
+    marginTop: scaleSize(16),
+    padding: scaleSize(12),
+    backgroundColor: '#FFF9E6',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFA000',
+  },
+  noteText: {
+    color: '#666',
+    fontSize: scaleSize(12),
+    textAlign: 'center',
+    lineHeight: scaleSize(16),
   },
 });
 

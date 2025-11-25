@@ -8,6 +8,9 @@ import MyOrders from '../screens/customer/MyOrders';
 import NotificationsScreen from '../screens/common/NotificationsScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 import { Platform } from 'react-native';
+import CategoriesScreen from '../screens/common/CategoriesScreen';
+import CategoryProductsScreen from '../screens/salesman/CategoryProductsScreen';
+import ProductDetailScreen from '../screens/salesman/ProductDetailScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -35,7 +38,7 @@ const CustomerTabs = () => {
     >
       <Tab.Screen 
         name="Home" 
-        component={HomeCatalog}
+        component={CategoriesScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="home" size={size} color={color} />
@@ -78,6 +81,8 @@ const CustomerStack: React.FC = () => {
     <Stack.Navigator>
       <Stack.Screen name="CustomerTabs" component={CustomerTabs} options={{ headerShown: false }} />
       <Stack.Screen name="PlaceOrder" component={PlaceOrder} />
+    <Stack.Screen name="CategoryProducts" component={CategoryProductsScreen} />
+    <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
     </Stack.Navigator>
   );
 };

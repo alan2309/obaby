@@ -17,6 +17,10 @@
       "supportsTablet": true
     },
     "android": {
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
       "package": "com.alankrit.obaby",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

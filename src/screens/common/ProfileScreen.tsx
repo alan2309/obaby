@@ -36,7 +36,11 @@ const ProfileScreen: React.FC = () => {
             <Text variant="bodyLarge" style={styles.label}>Phone:</Text>
             <Text variant="bodyLarge">{user?.phone}</Text>
           </View>
-          
+          <Divider style={styles.divider} />
+          <View style={styles.infoContainer}>
+            <Text variant="bodyLarge" style={styles.label}>User ID:</Text>
+            <Text variant="bodyLarge">{user?.uid}</Text>
+          </View>
           <Divider style={styles.divider} />
           
           <View style={styles.infoContainer}>

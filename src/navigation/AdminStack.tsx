@@ -11,35 +11,30 @@ import CustomerManagement from '../screens/admin/CustomerManagement';
 import ReportsScreen from '../screens/admin/ReportsScreen';
 import NotificationsAdmin from '../screens/admin/NotificationsAdmin';
 import ProfileScreen from '../screens/common/ProfileScreen';
-import { Platform } from 'react-native';
+import { Platform, Dimensions, StyleSheet } from 'react-native';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 const screenOptions = {
   headerShown: false,
-  gestureEnabled: Platform.OS !== 'web', // Disable gestures on web
+  gestureEnabled: Platform.OS !== 'web',
 };
+
 const AdminTabs = () => {
   return (
     <Tab.Navigator
       screenOptions={{
-  tabBarActiveTintColor: '#F7CAC9',
-  tabBarInactiveTintColor: '#A08B73',
-  tabBarStyle: {
-    backgroundColor: '#FAF9F6',
-    ...Platform.select({
-      web: {
-        maxWidth: 500,
-        alignSelf: 'center',
-        marginHorizontal: 'auto',
-      },
-    }),
-  },
-  headerStyle: {
-    backgroundColor: '#FAF9F6',
-  },
-}}
+        tabBarActiveTintColor: '#F7CAC9',
+        tabBarInactiveTintColor: '#A08B73',
+        tabBarStyle: styles.tabBar,
+        headerStyle: {
+          backgroundColor: '#FAF9F6',
+        },
+        tabBarItemStyle: styles.tabBarItem,
+      }}
     >
       <Tab.Screen 
         name="Dashboard" 
@@ -51,14 +46,14 @@ const AdminTabs = () => {
         }}
       />
       <Tab.Screen 
-  name="Inventory" 
-  component={InventoryScreen}
-  options={{
-    tabBarIcon: ({ color, size }) => (
-      <MaterialCommunityIcons name="warehouse" size={size} color={color} />
-    ),
-  }}
-/>
+        name="Inventory" 
+        component={InventoryScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="warehouse" size={size} color={color} />
+          ),
+        }}
+      />
       <Tab.Screen 
         name="Products" 
         component={ProductManagement}
@@ -87,15 +82,6 @@ const AdminTabs = () => {
         }}
       />
       <Tab.Screen 
-        name="notifications" 
-        component={ProfileScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen 
         name="Profile" 
         component={ProfileScreen}
         options={{
@@ -107,6 +93,29 @@ const AdminTabs = () => {
     </Tab.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: '#FAF9F6',
+    ...Platform.select({
+      web: {
+        width: '100%',
+        maxWidth: '100%',
+        alignSelf: 'stretch',
+        marginHorizontal: 0,
+        left: 0,
+        right: 0,
+      } as any,
+    }),
+  },
+  tabBarItem: Platform.select({
+    web: {
+      flex: 1,
+      minWidth: 0,
+    },
+    default: {},
+  }) as any,
+});
 
 const AdminStack: React.FC = () => {
   return (

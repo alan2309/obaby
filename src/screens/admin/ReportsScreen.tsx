@@ -55,6 +55,20 @@ const ReportsScreen: React.FC = () => {
     });
   }, [orders, dateRange]);
 
+  // Calculate total products sold
+  const calculateTotalProductsSold = (orders: Order[]): number => {
+    return orders.reduce((total, order) => {
+      return total + order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    }, 0);
+  };
+
+  // Calculate completion rate
+  const calculateCompletionRate = (orders: Order[]): number => {
+    const totalOrders = orders.length;
+    const deliveredOrders = orders.filter(order => order.status === 'Delivered').length;
+    return totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0;
+  };
+
   // Generate report data with filtered orders
   const report = useMemo(() => {
     const deliveredOrders = filteredOrders.filter(order => order.status === 'Delivered');
@@ -62,43 +76,31 @@ const ReportsScreen: React.FC = () => {
     
     // Calculate metrics
     const totalSales = deliveredOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-    const totalProfit = deliveredOrders.reduce((sum, order) => sum + (order.totalProfit || 0), 0);
+    const totalProductsSold = calculateTotalProductsSold(deliveredOrders);
     const totalOrders = deliveredOrders.length;
     const pendingOrders = filteredOrders.filter(order => order.status === 'Pending').length;
-    const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
-
-    // Get appropriate profit data based on date range
-    let profitData: { period: string; profit: number }[] = [];
-    switch (dateRange) {
-      case 'week':
-        profitData = calculateWeeklyProfit(filteredOrders);
-        break;
-      case 'month':
-        profitData = calculateMonthlyProfit(filteredOrders).map(({ month, profit }) => ({
-          period: month,
-          profit
-        }));
-        break;
-      case 'year':
-        profitData = calculateYearlyProfit(filteredOrders);
-        break;
-    }
+    const completionRate = calculateCompletionRate(filteredOrders);
 
     const topProducts = getTopProducts(filteredOrders, 10);
 
     // Salesman performance
     const salesmanPerformance = salesmen.map(salesman => ({
       ...salesman,
-      ...calculateSalesmanPerformance(filteredOrders, salesman.id)
-    })).sort((a, b) => b.totalSales - a.totalSales);
+      ...calculateSalesmanPerformance(filteredOrders, salesman.id),
+      productsSold: calculateTotalProductsSold(
+        filteredOrders.filter(order => 
+          order.salesmanId === salesman.id && order.status === 'Delivered'
+        )
+      )
+    })).sort((a, b) => b.productsSold - a.productsSold); // Sort by products sold
 
     return {
       summary: {
         totalSales,
-        totalProfit,
+        totalProductsSold,
         totalOrders,
         pendingOrders,
-        averageOrderValue,
+        completionRate,
         period: dateRange,
         generatedAt: new Date().toLocaleDateString('en-US', {
           year: 'numeric',
@@ -110,7 +112,6 @@ const ReportsScreen: React.FC = () => {
       },
       topProducts,
       salesmanPerformance: salesmanPerformance.slice(0, 5),
-      profitTrend: profitData,
       totalFilteredOrders: filteredOrders.length
     };
   }, [filteredOrders, users, dateRange]);
@@ -125,26 +126,21 @@ const ReportsScreen: React.FC = () => {
 ⏰ Period: ${periodText}
 
 📈 SUMMARY:
-• Total Sales: $${report.summary.totalSales.toFixed(2)}
-• Total Profit: $${report.summary.totalProfit.toFixed(2)}
+• Total Sales: ₹${report.summary.totalSales.toFixed(2)}
+• Products Sold: ${report.summary.totalProductsSold.toLocaleString()}
 • Completed Orders: ${report.summary.totalOrders}
 • Pending Orders: ${report.summary.pendingOrders}
 • Total Orders: ${report.totalFilteredOrders}
-• Average Order Value: $${report.summary.averageOrderValue.toFixed(2)}
+• Completion Rate: ${report.summary.completionRate}%
 
 🏆 TOP PRODUCTS:
 ${report.topProducts.map((product, index) => 
-  `${index + 1}. ${product.name} - ${product.sales} units - $${product.profit.toFixed(2)} profit`
+  `${index + 1}. ${product.name} - ${product.sales} units - ₹${product.profit.toFixed(2)} revenue`
 ).join('\n')}
 
 👥 TOP SALESMEN:
 ${report.salesmanPerformance.map((salesman, index) => 
-  `${index + 1}. ${salesman.name} - $${salesman.totalSales.toFixed(2)} sales - ${salesman.totalOrders} orders`
-).join('\n')}
-
-📈 PROFIT TREND:
-${report.profitTrend.map(item => 
-  `• ${item.period}: $${item.profit.toFixed(2)}`
+  `${index + 1}. ${salesman.name} - ${salesman.productsSold} products - ${salesman.totalOrders} orders`
 ).join('\n')}
     `.trim();
 
@@ -161,14 +157,14 @@ ${report.profitTrend.map(item =>
   const exportToCSV = () => {
     // Simple CSV export implementation
     const csvContent = [
-      ['Period', 'Total Sales', 'Total Profit', 'Total Orders', 'Pending Orders', 'Average Order Value'],
+      ['Period', 'Total Sales', 'Products Sold', 'Total Orders', 'Pending Orders', 'Completion Rate'],
       [
         dateRange,
         report.summary.totalSales.toFixed(2),
-        report.summary.totalProfit.toFixed(2),
+        report.summary.totalProductsSold.toString(),
         report.summary.totalOrders.toString(),
         report.summary.pendingOrders.toString(),
-        report.summary.averageOrderValue.toFixed(2)
+        report.summary.completionRate.toString() + '%'
       ]
     ].map(row => row.join(',')).join('\n');
 
@@ -234,7 +230,7 @@ ${report.profitTrend.map(item =>
       <View style={styles.summaryGrid}>
         <Card style={styles.summaryCard}>
           <Card.Content style={styles.summaryContent}>
-            <Text style={styles.summaryValue}>${report.summary.totalSales.toFixed(0)}</Text>
+            <Text style={styles.summaryValue}>₹{report.summary.totalSales.toFixed(0)}</Text>
             <Text style={styles.summaryLabel}>Total Sales</Text>
             <Text style={styles.summarySubtext}>{report.summary.totalOrders} completed orders</Text>
           </Card.Content>
@@ -242,12 +238,12 @@ ${report.profitTrend.map(item =>
 
         <Card style={styles.summaryCard}>
           <Card.Content style={styles.summaryContent}>
-            <Text style={[styles.summaryValue, styles.profitValue]}>${report.summary.totalProfit.toFixed(0)}</Text>
-            <Text style={styles.summaryLabel}>Total Profit</Text>
+            <Text style={[styles.summaryValue, styles.productsValue]}>{report.summary.totalProductsSold.toLocaleString()}</Text>
+            <Text style={styles.summaryLabel}>Products Sold</Text>
             <Text style={styles.summarySubtext}>
-              {report.summary.totalSales > 0 ? 
-                `${((report.summary.totalProfit / report.summary.totalSales) * 100).toFixed(1)}% margin` : 
-                '0% margin'
+              {report.summary.totalOrders > 0 ? 
+                `${Math.round(report.summary.totalProductsSold / report.summary.totalOrders)} per order` : 
+                '0 per order'
               }
             </Text>
           </Card.Content>
@@ -263,9 +259,9 @@ ${report.profitTrend.map(item =>
 
         <Card style={styles.summaryCard}>
           <Card.Content style={styles.summaryContent}>
-            <Text style={styles.summaryValue}>${report.summary.averageOrderValue.toFixed(0)}</Text>
-            <Text style={styles.summaryLabel}>Avg Order</Text>
-            <Text style={styles.summarySubtext}>Per completed order</Text>
+            <Text style={styles.summaryValue}>{report.summary.completionRate}%</Text>
+            <Text style={styles.summaryLabel}>Completion Rate</Text>
+            <Text style={styles.summarySubtext}>Order fulfillment</Text>
           </Card.Content>
         </Card>
       </View>
@@ -302,7 +298,7 @@ ${report.profitTrend.map(item =>
             <DataTable.Header>
               <DataTable.Title style={styles.productColumn}>Product</DataTable.Title>
               <DataTable.Title numeric style={styles.unitsColumn}>Units</DataTable.Title>
-              <DataTable.Title numeric style={styles.profitColumn}>Profit</DataTable.Title>
+              <DataTable.Title numeric style={styles.revenueColumn}>Revenue</DataTable.Title>
             </DataTable.Header>
 
             {report.topProducts.map((product, index) => (
@@ -315,8 +311,8 @@ ${report.profitTrend.map(item =>
                 <DataTable.Cell numeric style={styles.unitsColumn}>
                   <Text style={styles.productSales}>{product.sales}</Text>
                 </DataTable.Cell>
-                <DataTable.Cell numeric style={styles.profitColumn}>
-                  <Text style={styles.productProfit}>${product.profit.toFixed(0)}</Text>
+                <DataTable.Cell numeric style={styles.revenueColumn}>
+                  <Text style={styles.productRevenue}>₹{product.profit.toFixed(0)}</Text>
                 </DataTable.Cell>
               </DataTable.Row>
             ))}
@@ -336,8 +332,8 @@ ${report.profitTrend.map(item =>
           <DataTable>
             <DataTable.Header>
               <DataTable.Title style={styles.salesmanColumn}>Salesman</DataTable.Title>
+              <DataTable.Title numeric style={styles.productsColumn}>Products</DataTable.Title>
               <DataTable.Title numeric style={styles.ordersColumn}>Orders</DataTable.Title>
-              <DataTable.Title numeric style={styles.salesColumn}>Sales</DataTable.Title>
             </DataTable.Header>
 
             {report.salesmanPerformance.map((salesman, index) => (
@@ -352,11 +348,11 @@ ${report.profitTrend.map(item =>
                     </Text>
                   </View>
                 </DataTable.Cell>
+                <DataTable.Cell numeric style={styles.productsColumn}>
+                  <Text style={styles.salesmanProducts}>{salesman.productsSold}</Text>
+                </DataTable.Cell>
                 <DataTable.Cell numeric style={styles.ordersColumn}>
                   <Text style={styles.salesmanOrders}>{salesman.totalOrders}</Text>
-                </DataTable.Cell>
-                <DataTable.Cell numeric style={styles.salesColumn}>
-                  <Text style={styles.salesmanSales}>${salesman.totalSales.toFixed(0)}</Text>
                 </DataTable.Cell>
               </DataTable.Row>
             ))}
@@ -367,34 +363,48 @@ ${report.profitTrend.map(item =>
         </Card.Content>
       </Card>
 
-      {/* Profit Trend */}
+      {/* Order Status Breakdown */}
       <Card style={styles.reportCard}>
         <Card.Content>
           <Text variant="titleLarge" style={styles.reportTitle}>
-            📈 Profit Trend ({dateRange})
+            📊 Order Status Breakdown
           </Text>
-          {report.profitTrend.map((item, index) => (
-            <View key={index}>
-              <View style={styles.trendRow}>
-                <Text style={styles.trendPeriod}>{item.period}</Text>
-                <View style={styles.trendValueContainer}>
-                  <Text style={styles.trendProfit}>${item.profit.toFixed(0)}</Text>
-                  {index > 0 && report.profitTrend[index - 1].profit > 0 && (
-                    <Text style={[
-                      styles.trendChange,
-                      item.profit > report.profitTrend[index - 1].profit ? styles.trendPositive : styles.trendNegative
-                    ]}>
-                      {item.profit > report.profitTrend[index - 1].profit ? '↗' : '↘'}
-                    </Text>
-                  )}
-                </View>
-              </View>
-              {index < report.profitTrend.length - 1 && <Divider />}
+          <View style={styles.statusBreakdown}>
+            <View style={styles.statusItem}>
+              <View style={[styles.statusDot, styles.deliveredDot]} />
+              <Text style={styles.statusLabel}>Delivered</Text>
+              <Text style={styles.statusCount}>
+                {filteredOrders.filter(order => order.status === 'Delivered').length}
+              </Text>
             </View>
-          ))}
-          {report.profitTrend.length === 0 && (
-            <Text style={styles.emptyText}>No profit data for this period</Text>
-          )}
+            <View style={styles.statusItem}>
+              <View style={[styles.statusDot, styles.pendingDot]} />
+              <Text style={styles.statusLabel}>Pending</Text>
+              <Text style={styles.statusCount}>
+                {filteredOrders.filter(order => order.status === 'Pending').length}
+              </Text>
+            </View>
+            <View style={styles.statusItem}>
+              <View style={[styles.statusDot, styles.partialDot]} />
+              <Text style={styles.statusLabel}>Partial</Text>
+              <Text style={styles.statusCount}>
+                {filteredOrders.filter(order => order.status === 'Partially Delivered').length}
+              </Text>
+            </View>
+            <View style={styles.statusItem}>
+              <View style={[styles.statusDot, styles.otherDot]} />
+              <Text style={styles.statusLabel}>Other</Text>
+              <Text style={styles.statusCount}>
+                {filteredOrders.filter(order => 
+                  !['Delivered', 'Pending', 'Partially Delivered'].includes(order.status)
+                ).length}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.totalOrdersRow}>
+            <Text style={styles.totalOrdersLabel}>Total Orders:</Text>
+            <Text style={styles.totalOrdersCount}>{report.totalFilteredOrders}</Text>
+          </View>
         </Card.Content>
       </Card>
     </ScrollView>
@@ -469,7 +479,7 @@ const styles = StyleSheet.create({
     color: '#F7CAC9',
     marginBottom: scaleSize(4),
   },
-  profitValue: {
+  productsValue: {
     color: '#4CAF50',
   },
   summaryLabel: {
@@ -514,10 +524,10 @@ const styles = StyleSheet.create({
   // Table column styles
   productColumn: { flex: 2 },
   unitsColumn: { flex: 1 },
-  profitColumn: { flex: 1 },
+  revenueColumn: { flex: 1 },
   salesmanColumn: { flex: 2 },
+  productsColumn: { flex: 1 },
   ordersColumn: { flex: 1 },
-  salesColumn: { flex: 1 },
   productName: {
     fontSize: scaleSize(12),
     color: '#3B3B3B',
@@ -527,7 +537,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#3B3B3B',
   },
-  productProfit: {
+  productRevenue: {
     fontSize: scaleSize(12),
     fontWeight: '600',
     color: '#4CAF50',
@@ -541,52 +551,79 @@ const styles = StyleSheet.create({
     fontSize: scaleSize(10),
     color: '#A08B73',
   },
+  salesmanProducts: {
+    fontSize: scaleSize(12),
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
   salesmanOrders: {
     fontSize: scaleSize(12),
     fontWeight: '600',
-    color: '#3B3B3B',
-  },
-  salesmanSales: {
-    fontSize: scaleSize(12),
-    fontWeight: '600',
     color: '#F7CAC9',
-  },
-  trendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: scaleSize(12),
-  },
-  trendPeriod: {
-    fontSize: scaleSize(12),
-    color: '#3B3B3B',
-    fontWeight: '600',
-  },
-  trendValueContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scaleSize(8),
-  },
-  trendProfit: {
-    fontSize: scaleSize(12),
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  trendChange: {
-    fontSize: scaleSize(14),
-    fontWeight: 'bold',
-  },
-  trendPositive: {
-    color: '#4CAF50',
-  },
-  trendNegative: {
-    color: '#F44336',
   },
   emptyText: {
     textAlign: 'center',
     color: '#A08B73',
     fontStyle: 'italic',
     marginTop: scaleSize(8),
+  },
+  // Order Status Breakdown Styles
+  statusBreakdown: {
+    marginBottom: scaleSize(16),
+  },
+  statusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: scaleSize(10),
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  statusDot: {
+    width: scaleSize(12),
+    height: scaleSize(12),
+    borderRadius: scaleSize(6),
+    marginRight: scaleSize(8),
+  },
+  deliveredDot: {
+    backgroundColor: '#4CAF50',
+  },
+  pendingDot: {
+    backgroundColor: '#FFA000',
+  },
+  partialDot: {
+    backgroundColor: '#2196F3',
+  },
+  otherDot: {
+    backgroundColor: '#9E9E9E',
+  },
+  statusLabel: {
+    flex: 1,
+    fontSize: scaleSize(12),
+    color: '#3B3B3B',
+  },
+  statusCount: {
+    fontSize: scaleSize(12),
+    fontWeight: '600',
+    color: '#3B3B3B',
+  },
+  totalOrdersRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: scaleSize(12),
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  totalOrdersLabel: {
+    fontSize: scaleSize(14),
+    fontWeight: '600',
+    color: '#3B3B3B',
+  },
+  totalOrdersCount: {
+    fontSize: scaleSize(16),
+    fontWeight: 'bold',
+    color: '#F7CAC9',
   },
   loadingContainer: {
     flex: 1,

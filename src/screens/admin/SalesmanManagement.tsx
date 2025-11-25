@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { View, StyleSheet, ScrollView, RefreshControl } from "react-native";
+import { View, StyleSheet, ScrollView, RefreshControl, Alert } from "react-native";
 import {
   Text,
   Card,
@@ -8,10 +8,10 @@ import {
   Button,
   ActivityIndicator,
   Searchbar,
-  Menu,
-  Divider,
   Portal,
   Modal,
+  TextInput,
+  Dialog,
 } from "react-native-paper";
 import {
   getUsers,
@@ -19,22 +19,22 @@ import {
   getAttendance,
   Order,
 } from "../../firebase/firestore";
-import { calculateSalesmanPerformance } from "../../utils/calculateProfit";
+import { registerSalesman, UserData } from "../../firebase/auth";
 import { scaleSize, platformStyle } from "../../utils/constants";
-import { UserData } from "../../firebase/auth";
 
 interface SalesmanWithStats extends UserData {
   performance: {
     totalOrders: number;
     deliveredOrders: number;
     totalSales: number;
-    totalProfit: number;
+    totalProductsSold: number; // Replaced totalProfit
     averageOrderValue: number;
     completionRate: number;
   };
   calculatedDiscountGiven: number;
   lastActive: Date | null;
   allOrders: Order[];
+  isTopPerformer: boolean;
 }
 
 const SalesmanManagement: React.FC = () => {
@@ -43,16 +43,23 @@ const SalesmanManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSalesman, setSelectedSalesman] =
-    useState<SalesmanWithStats | null>(null);
+  const [selectedSalesman, setSelectedSalesman] = useState<SalesmanWithStats | null>(null);
   const [salesmanOrders, setSalesmanOrders] = useState<Order[]>([]);
   const [salesmanAttendance, setSalesmanAttendance] = useState<any[]>([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
-  const [sortBy, setSortBy] = useState<"name" | "sales" | "profit" | "orders">(
-    "sales"
-  );
-  const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  
+  // Add Salesman Dialog State
+  const [addDialogVisible, setAddDialogVisible] = useState(false);
+  const [newSalesman, setNewSalesman] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    city: "", // Added city field
+    password: "",
+    maxDiscountPercent: "10",
+  });
+  const [creatingSalesman, setCreatingSalesman] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -67,13 +74,11 @@ const SalesmanManagement: React.FC = () => {
       const salesmenData = usersData.filter(
         (user: any) => user.role === "salesman"
       ) as UserData[];
-
-      // Fix: Map the data to match UserData interface
+      // Map the data to match UserData interface
       const mappedSalesmen = salesmenData.map((salesman) => ({
         ...salesman,
-        uid: salesman.id || salesman.uid, // Use id as uid if uid doesn't exist
+        uid: salesman.id || salesman.uid,
       }));
-
       setSalesmen(mappedSalesmen);
 
       // Load orders for all salesmen
@@ -85,6 +90,7 @@ const SalesmanManagement: React.FC = () => {
       setAllOrders(flattenedOrders);
     } catch (error: any) {
       console.error("Error loading salesman data:", error);
+      Alert.alert("Error", "Failed to load salesman data");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -96,9 +102,15 @@ const SalesmanManagement: React.FC = () => {
     loadData();
   };
 
+  // Calculate total products sold from orders
+  const calculateTotalProductsSold = (orders: Order[]): number => {
+    return orders.reduce((total, order) => {
+      return total + order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    }, 0);
+  };
+
   const salesmenWithStats = useMemo((): SalesmanWithStats[] => {
-    return salesmen.map((salesman) => {
-      // Filter salesman's delivered orders (same logic as Dashboard)
+    const salesmenStats = salesmen.map((salesman) => {
       const salesmanOrders = allOrders.filter(
         (order) => order.salesmanId === salesman.uid
       );
@@ -106,27 +118,18 @@ const SalesmanManagement: React.FC = () => {
         (order) => order.status === "Delivered"
       );
 
-      // Calculate metrics EXACTLY like Dashboard does
       const totalOrders = salesmanOrders.length;
       const totalSales = deliveredOrders.reduce(
         (sum, order) => sum + (order?.totalAmount || 0),
         0
       );
-      const totalProfit = deliveredOrders.reduce(
-        (sum, order) => sum + (order?.totalProfit || 0),
-        0
-      );
-      const pendingOrders = salesmanOrders.filter(
-        (order) => order.status === "Pending"
-      ).length;
+      const totalProductsSold = calculateTotalProductsSold(deliveredOrders); // Calculate products sold
 
-      // Calculate completion rate
       const completionRate =
         totalOrders > 0 ? (deliveredOrders.length / totalOrders) * 100 : 0;
       const averageOrderValue =
         deliveredOrders.length > 0 ? totalSales / deliveredOrders.length : 0;
 
-      // Calculate total discount given from orders
       const calculatedDiscountGiven = deliveredOrders.reduce((sum, order) => {
         return (
           sum +
@@ -137,7 +140,6 @@ const SalesmanManagement: React.FC = () => {
         );
       }, 0);
 
-      // Get latest order date
       const lastOrder = [...salesmanOrders].sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -149,53 +151,46 @@ const SalesmanManagement: React.FC = () => {
           totalOrders,
           deliveredOrders: deliveredOrders.length,
           totalSales,
-          totalProfit,
+          totalProductsSold, // Replaced totalProfit
           averageOrderValue,
           completionRate: Math.round(completionRate),
         },
         calculatedDiscountGiven,
         lastActive: lastOrder ? new Date(lastOrder.createdAt) : null,
         allOrders: salesmanOrders,
+        isTopPerformer: false, // Will be set below
       };
     });
+
+    // Mark top performers (top 3 by products sold instead of sales)
+    const sortedByProductsSold = [...salesmenStats].sort(
+      (a, b) => b.performance.totalProductsSold - a.performance.totalProductsSold
+    );
+    
+    return salesmenStats.map(salesman => ({
+      ...salesman,
+      isTopPerformer: sortedByProductsSold.indexOf(salesman) < 3 && salesman.performance.totalProductsSold > 0
+    }));
   }, [salesmen, allOrders]);
 
-  // Filter and sort salesmen
+  // Filter salesmen based on search
   const filteredSalesmen = useMemo(() => {
-    let filtered = salesmenWithStats.slice(); // copy to avoid mutating original
-
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(
-        (salesman) =>
-          salesman.name.toLowerCase().includes(query) ||
-          salesman.email.toLowerCase().includes(query)
-      );
+    if (!searchQuery.trim()) {
+      return salesmenWithStats;
     }
 
-    // Apply sorting - FIXED to use performance fields consistently
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "sales":
-          return b.performance.totalSales - a.performance.totalSales;
-        case "profit":
-          return b.performance.totalProfit - a.performance.totalProfit;
-        case "orders":
-          return b.performance.totalOrders - a.performance.totalOrders;
-        default:
-          return b.performance.totalSales - a.performance.totalSales;
-      }
-    });
-
-    return filtered;
-  }, [salesmenWithStats, searchQuery, sortBy]);
+    const query = searchQuery.toLowerCase().trim();
+    return salesmenWithStats.filter(
+      (salesman) =>
+        salesman.name.toLowerCase().includes(query) ||
+        salesman.email.toLowerCase().includes(query) ||
+        salesman.uid.toLowerCase().includes(query) ||
+        salesman.city.toLowerCase().includes(query) // Added city to search
+    );
+  }, [salesmenWithStats, searchQuery]);
 
   const loadSalesmanDetails = async (salesman: SalesmanWithStats) => {
     try {
-      // Validate salesmanId before making the call
       if (!salesman.uid) {
         console.error("Invalid salesman ID:", salesman.uid);
         return;
@@ -214,15 +209,57 @@ const SalesmanManagement: React.FC = () => {
       setDetailModalVisible(true);
     } catch (error) {
       console.error("Error loading salesman details:", error);
+      Alert.alert("Error", "Failed to load salesman details");
     } finally {
       setDetailLoading(false);
     }
   };
 
-  const getPerformanceColor = (completionRate: number) => {
-    if (completionRate >= 90) return "#4CAF50";
-    if (completionRate >= 70) return "#FFA000";
-    return "#F44336";
+  const handleAddSalesman = async () => {
+    if (!newSalesman.name || !newSalesman.email || !newSalesman.phone || !newSalesman.city || !newSalesman.password) {
+      Alert.alert("Error", "Please fill all required fields");
+      return;
+    }
+
+    if (!newSalesman.email.includes('@')) {
+      Alert.alert("Error", "Please enter a valid email");
+      return;
+    }
+
+    try {
+      setCreatingSalesman(true);
+      await registerSalesman(
+        newSalesman.email,
+        newSalesman.password,
+        newSalesman.name,
+        newSalesman.phone,
+        newSalesman.city, // Added city
+      );
+
+      Alert.alert("Success", "Salesman account created successfully!");
+      setAddDialogVisible(false);
+      setNewSalesman({
+        name: "",
+        email: "",
+        phone: "",
+        city: "", // Reset city
+        password: "",
+        maxDiscountPercent: "10",
+      });
+      loadData(); // Refresh the list
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to create salesman account");
+    } finally {
+      setCreatingSalesman(false);
+    }
+  };
+
+  // Performance color based on products sold (adjusted scale)
+  const getPerformanceColor = (productsSold: number) => {
+    if (productsSold >= 1000) return "#4CAF50"; // Excellent
+    if (productsSold >= 500) return "#FFA000";  // Good
+    if (productsSold >= 100) return "#FF9800";  // Average
+    return "#F44336"; // Needs improvement
   };
 
   const formatDate = (date: Date | null) => {
@@ -235,9 +272,9 @@ const SalesmanManagement: React.FC = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("en-IN", {
       style: "currency",
-      currency: "USD",
+      currency: "INR",
     }).format(amount);
   };
 
@@ -277,64 +314,24 @@ const SalesmanManagement: React.FC = () => {
           Sales Team Management
         </Text>
 
-        {/* Search and Sort */}
+        {/* Search and Add Button */}
         <View style={styles.controlsRow}>
           <Searchbar
-            placeholder="Search salesmen..."
+            placeholder="Search salesmen by name, email, city, or ID..."
             onChangeText={setSearchQuery}
             value={searchQuery}
             style={styles.searchbar}
             icon={searchQuery ? "close" : "magnify"}
             onIconPress={searchQuery ? () => setSearchQuery("") : undefined}
           />
-
-          <Menu
-            visible={sortMenuVisible}
-            onDismiss={() => setSortMenuVisible(false)}
-            anchor={
-              <Button
-                mode="outlined"
-                onPress={() => setSortMenuVisible(true)}
-                style={styles.sortButton}
-                icon="sort"
-              >
-                {sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}
-              </Button>
-            }
+          <Button
+            mode="contained"
+            onPress={() => setAddDialogVisible(true)}
+            style={styles.addButton}
+            icon="account-plus"
           >
-            <Menu.Item
-              onPress={() => {
-                setSortBy("name");
-                setSortMenuVisible(false);
-              }}
-              title="By Name"
-              leadingIcon={sortBy === "name" ? "check" : undefined}
-            />
-            <Menu.Item
-              onPress={() => {
-                setSortBy("sales");
-                setSortMenuVisible(false);
-              }}
-              title="By Sales"
-              leadingIcon={sortBy === "sales" ? "check" : undefined}
-            />
-            <Menu.Item
-              onPress={() => {
-                setSortBy("profit");
-                setSortMenuVisible(false);
-              }}
-              title="By Profit"
-              leadingIcon={sortBy === "profit" ? "check" : undefined}
-            />
-            <Menu.Item
-              onPress={() => {
-                setSortBy("orders");
-                setSortMenuVisible(false);
-              }}
-              title="By Orders"
-              leadingIcon={sortBy === "orders" ? "check" : undefined}
-            />
-          </Menu>
+            Add Salesman
+          </Button>
         </View>
 
         {/* Summary Stats */}
@@ -363,26 +360,21 @@ const SalesmanManagement: React.FC = () => {
           <Card style={styles.summaryCard}>
             <Card.Content style={styles.summaryContent}>
               <Text style={styles.summaryValue}>
-                {formatCurrency(
-                  salesmenWithStats.reduce(
-                    (sum, s) => sum + s.performance.totalProfit,
-                    0
-                  )
-                )}
+                {salesmenWithStats.reduce(
+                  (sum, s) => sum + s.performance.totalProductsSold,
+                  0
+                ).toLocaleString()}
               </Text>
-              <Text style={styles.summaryLabel}>Total Profit</Text>
+              <Text style={styles.summaryLabel}>Items Sold</Text>
             </Card.Content>
           </Card>
 
           <Card style={styles.summaryCard}>
             <Card.Content style={styles.summaryContent}>
               <Text style={styles.summaryValue}>
-                {salesmenWithStats.reduce(
-                  (sum, s) => sum + s.performance.totalOrders,
-                  0
-                )}
+                {salesmenWithStats.filter(s => s.isTopPerformer).length}
               </Text>
-              <Text style={styles.summaryLabel}>Total Orders</Text>
+              <Text style={styles.summaryLabel}>Top Performers</Text>
             </Card.Content>
           </Card>
         </View>
@@ -398,6 +390,9 @@ const SalesmanManagement: React.FC = () => {
                 <DataTable.Title style={styles.nameColumn}>
                   Salesman
                 </DataTable.Title>
+                <DataTable.Title style={styles.cityColumn}>
+                  City
+                </DataTable.Title>
                 <DataTable.Title numeric style={styles.ordersColumn}>
                   Orders
                 </DataTable.Title>
@@ -405,7 +400,7 @@ const SalesmanManagement: React.FC = () => {
                   Sales
                 </DataTable.Title>
                 <DataTable.Title numeric style={styles.performanceColumn}>
-                  Performance
+                  Products Sold
                 </DataTable.Title>
               </DataTable.Header>
 
@@ -413,25 +408,47 @@ const SalesmanManagement: React.FC = () => {
                 <DataTable.Row
                   key={salesman.uid}
                   onPress={() => loadSalesmanDetails(salesman)}
-                  style={styles.salesmanRow}
+                  style={[
+                    styles.salesmanRow,
+                    salesman.isTopPerformer && styles.topPerformerRow
+                  ]}
                 >
                   <DataTable.Cell style={styles.nameColumn}>
                     <View style={styles.salesmanInfo}>
-                      <View style={styles.avatar}>
+                      <View style={[
+                        styles.avatar,
+                        salesman.isTopPerformer && styles.topPerformerAvatar
+                      ]}>
                         <Text style={styles.avatarText}>
                           {getSalesmanInitials(salesman.name)}
                         </Text>
+                        {salesman.isTopPerformer && (
+                          <View style={styles.topPerformerBadge}>
+                            <Text style={styles.topPerformerBadgeText}>★</Text>
+                          </View>
+                        )}
                       </View>
                       <View style={styles.salesmanDetails}>
-                        <Text style={styles.salesmanName}>{salesman.name}</Text>
+                        <View style={styles.nameRow}>
+                          <Text style={styles.salesmanName}>{salesman.name}</Text>
+                        </View>
                         <Text style={styles.salesmanEmail}>
                           {salesman.email}
                         </Text>
-                        <Text style={styles.lastActive}>
-                          Last: {formatDate(salesman.lastActive)}
+                        <Text style={styles.salesmanId}>
+                          ID: {salesman.uid}
                         </Text>
                       </View>
                     </View>
+                  </DataTable.Cell>
+                  <DataTable.Cell style={styles.cityColumn}>
+                    <Chip 
+                      mode="outlined" 
+                      style={styles.cityChip}
+                      textStyle={styles.cityChipText}
+                    >
+                      {salesman.city || "Not set"}
+                    </Chip>
                   </DataTable.Cell>
                   <DataTable.Cell numeric style={styles.ordersColumn}>
                     <View style={styles.ordersCell}>
@@ -448,10 +465,6 @@ const SalesmanManagement: React.FC = () => {
                       <Text style={styles.salesAmount}>
                         {formatCurrency(salesman.performance.totalSales)}
                       </Text>
-                      <Text style={styles.salesProfit}>
-                        {formatCurrency(salesman.performance.totalProfit)}{" "}
-                        profit
-                      </Text>
                     </View>
                   </DataTable.Cell>
                   <DataTable.Cell numeric style={styles.performanceColumn}>
@@ -460,13 +473,13 @@ const SalesmanManagement: React.FC = () => {
                       style={styles.performanceChip}
                       textStyle={{
                         color: getPerformanceColor(
-                          salesman.performance.completionRate
+                          salesman.performance.totalProductsSold
                         ),
-                        fontSize: 15,
+                        fontSize: 12,
                         fontWeight: "bold",
                       }}
                     >
-                      {salesman.performance.completionRate}%
+                      {salesman.performance.totalProductsSold.toLocaleString()}
                     </Chip>
                   </DataTable.Cell>
                 </DataTable.Row>
@@ -477,7 +490,7 @@ const SalesmanManagement: React.FC = () => {
               <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>
                   {salesmen.length === 0
-                    ? "No salesmen found in the system"
+                    ? "No salesmen found. Add your first salesman!"
                     : "No salesmen match your search criteria"}
                 </Text>
               </View>
@@ -486,14 +499,73 @@ const SalesmanManagement: React.FC = () => {
         </Card>
       </ScrollView>
 
+      {/* Add Salesman Dialog */}
+      <Portal>
+        <Dialog visible={addDialogVisible} onDismiss={() => setAddDialogVisible(false)}>
+          <Dialog.Title>Add New Salesman</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label="Full Name *"
+              value={newSalesman.name}
+              onChangeText={(text) => setNewSalesman({...newSalesman, name: text})}
+              style={styles.input}
+              mode="outlined"
+            />
+            <TextInput
+              label="Email *"
+              value={newSalesman.email}
+              onChangeText={(text) => setNewSalesman({...newSalesman, email: text})}
+              style={styles.input}
+              mode="outlined"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              label="Phone *"
+              value={newSalesman.phone}
+              onChangeText={(text) => setNewSalesman({...newSalesman, phone: text})}
+              style={styles.input}
+              mode="outlined"
+              keyboardType="phone-pad"
+            />
+            <TextInput
+              label="City *"
+              value={newSalesman.city}
+              onChangeText={(text) => setNewSalesman({...newSalesman, city: text})}
+              style={styles.input}
+              mode="outlined"
+              placeholder="Enter city name"
+            />
+            <TextInput
+              label="Password *"
+              value={newSalesman.password}
+              onChangeText={(text) => setNewSalesman({...newSalesman, password: text})}
+              style={styles.input}
+              mode="outlined"
+              secureTextEntry
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button labelStyle={{color: '#000'}} onPress={() => setAddDialogVisible(false)}>Cancel</Button>
+            <Button 
+              onPress={handleAddSalesman} 
+              loading={creatingSalesman}
+              disabled={creatingSalesman}
+              labelStyle={{color: '#000'}}
+            >
+              Create Account
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
       {/* Salesman Detail Modal */}
       <Portal>
         <Modal
           visible={detailModalVisible}
           onDismiss={() => setDetailModalVisible(false)}
-          contentContainerStyle={styles.modalContainer} // outer container (NO overflow here)
+          contentContainerStyle={styles.modalContainer}
         >
-          {/* INNER wrapper - plain View keeps clipping without affecting Surface shadow */}
           <View style={styles.modalInner}>
             {selectedSalesman && (
               <ScrollView>
@@ -512,6 +584,12 @@ const SalesmanManagement: React.FC = () => {
                     </Text>
                     <Text style={styles.modalPhone}>
                       {selectedSalesman.phone || "No phone number"}
+                    </Text>
+                    <Text style={styles.modalCity}>
+                      📍 {selectedSalesman.city || "City not specified"}
+                    </Text>
+                    <Text style={styles.modalId}>
+                      Salesman ID: {selectedSalesman.uid}
                     </Text>
                     <Text style={styles.modalMemberSince}>
                       Member since: {formatDate(selectedSalesman.createdAt)}
@@ -557,11 +635,9 @@ const SalesmanManagement: React.FC = () => {
                           </View>
                           <View style={styles.statItem}>
                             <Text style={styles.statValue}>
-                              {formatCurrency(
-                                selectedSalesman.performance.totalProfit
-                              )}
+                              {selectedSalesman.performance.totalProductsSold.toLocaleString()}
                             </Text>
-                            <Text style={styles.statLabel}>Total Profit</Text>
+                            <Text style={styles.statLabel}>Products Sold</Text>
                           </View>
                         </View>
 
@@ -575,7 +651,7 @@ const SalesmanManagement: React.FC = () => {
                                 styles.additionalStatValue,
                                 {
                                   color: getPerformanceColor(
-                                    selectedSalesman.performance.completionRate
+                                    selectedSalesman.performance.totalProductsSold
                                   ),
                                 },
                               ]}
@@ -593,27 +669,6 @@ const SalesmanManagement: React.FC = () => {
                               )}
                             </Text>
                           </View>
-                          <View style={styles.additionalStat}>
-                            <Text style={styles.additionalStatLabel}>
-                              Total Discount Given:
-                            </Text>
-                            <Text style={styles.additionalStatValue}>
-                              {formatCurrency(
-                                selectedSalesman.calculatedDiscountGiven
-                              )}
-                            </Text>
-                          </View>
-                          {selectedSalesman.maxDiscountPercent &&
-                            selectedSalesman.maxDiscountPercent > 0 && (
-                              <View style={styles.additionalStat}>
-                                <Text style={styles.additionalStatLabel}>
-                                  Max Discount Allowed:
-                                </Text>
-                                <Text style={styles.additionalStatValue}>
-                                  {selectedSalesman.maxDiscountPercent}%
-                                </Text>
-                              </View>
-                            )}
                         </View>
                       </Card.Content>
                     </Card>
@@ -637,15 +692,16 @@ const SalesmanManagement: React.FC = () => {
                                 {order.items.length} items •{" "}
                                 {formatCurrency(order.totalAmount)}
                               </Text>
+                              <Text style={styles.productsCount}>
+                                {order.items.reduce((sum, item) => sum + item.quantity, 0)} products
+                              </Text>
                             </View>
                             <View style={styles.orderDetails}>
                               <Chip
                                 compact
                                 textStyle={{
-                                  fontSize: 14,
-                                  justifyContent: "center",
+                                  fontSize: 12,
                                   fontWeight: "bold",
-                                  alignItems: "center",
                                 }}
                                 style={[
                                   styles.statusChip,
@@ -670,80 +726,6 @@ const SalesmanManagement: React.FC = () => {
                         )}
                       </Card.Content>
                     </Card>
-
-                    {/* Attendance Summary */}
-                    <Card style={styles.detailCard}>
-                      <Card.Content>
-                        <Text variant="titleSmall" style={styles.detailCardTitle}>
-                          ⏰ Attendance Summary
-                        </Text>
-                        <View style={styles.attendanceSummary}>
-                          <View style={styles.attendanceStat}>
-                            <Text style={styles.attendanceStatValue}>
-                              {calculateTotalAttendanceHours(
-                                salesmanAttendance
-                              ).toFixed(1)}
-                              h
-                            </Text>
-                            <Text style={styles.attendanceStatLabel}>
-                              Total Hours
-                            </Text>
-                          </View>
-                          <View style={styles.attendanceStat}>
-                            <Text style={styles.attendanceStatValue}>
-                              {salesmanAttendance.length}
-                            </Text>
-                            <Text style={styles.attendanceStatLabel}>
-                              Total Days
-                            </Text>
-                          </View>
-                          <View style={styles.attendanceStat}>
-                            <Text style={styles.attendanceStatValue}>
-                              {salesmanAttendance.length > 0
-                                ? (
-                                    calculateTotalAttendanceHours(
-                                      salesmanAttendance
-                                    ) / salesmanAttendance.length
-                                  ).toFixed(1)
-                                : 0}
-                              h
-                            </Text>
-                            <Text style={styles.attendanceStatLabel}>
-                              Avg per Day
-                            </Text>
-                          </View>
-                        </View>
-
-                        <Text style={styles.attendanceSubtitle}>
-                          Recent Attendance:
-                        </Text>
-                        {salesmanAttendance.slice(0, 5).map((record, index) => (
-                          <View key={index} style={styles.attendanceItem}>
-                            <Text style={styles.attendanceDate}>
-                              {new Date(record.date).toLocaleDateString()}
-                            </Text>
-                            <View style={styles.attendanceDetails}>
-                              <Text style={styles.attendanceHours}>
-                                {record.totalHours || 0}h
-                              </Text>
-                              {record.loginTime && (
-                                <Text style={styles.attendanceTime}>
-                                  {new Date(record.loginTime).toLocaleTimeString(
-                                    [],
-                                    { hour: "2-digit", minute: "2-digit" }
-                                  )}
-                                </Text>
-                              )}
-                            </View>
-                          </View>
-                        ))}
-                        {salesmanAttendance.length === 0 && (
-                          <Text style={styles.noDataText}>
-                            No attendance records found
-                          </Text>
-                        )}
-                      </Card.Content>
-                    </Card>
                   </>
                 )}
 
@@ -764,7 +746,6 @@ const SalesmanManagement: React.FC = () => {
   );
 };
 
-// ... (keep all the same styles from the previous implementation)
 
 const styles = StyleSheet.create({
   container: {
@@ -774,6 +755,11 @@ const styles = StyleSheet.create({
   content: {
     padding: platformStyle.padding,
     paddingBottom: 20,
+  },
+   productsCount: {
+    fontSize: scaleSize(12),
+    color: "#4CAF50",
+    fontWeight: "600",
   },
   title: {
     textAlign: "center",
@@ -790,9 +776,8 @@ const styles = StyleSheet.create({
   searchbar: {
     flex: 1,
   },
-  sortButton: {
-    backgroundColor: "#FAF9F6",
-    minWidth: 100,
+  addButton: {
+    backgroundColor: "#F7CAC9",
   },
   summaryGrid: {
     flexDirection: "row",
@@ -830,76 +815,129 @@ const styles = StyleSheet.create({
   },
   // Table column styles
   nameColumn: { flex: 3 },
-  ordersColumn: { flex: 1.5 },
-  salesColumn: { flex: 2 },
-  performanceColumn: { flex: 1.5 },
+  cityColumn: { flex: 1.5 },
+  ordersColumn: { flex: 1.2 },
+  salesColumn: { flex: 1.5 },
+  performanceColumn: { flex: 1.2 },
   salesmanRow: {
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
+  },
+  topPerformerRow: {
+    backgroundColor: "#FFF9C4",
   },
   salesmanInfo: {
     flexDirection: "row",
     alignItems: "center",
   },
   avatar: {
-    width: scaleSize(25),
-    height: scaleSize(25),
+    width: scaleSize(40),
+    height: scaleSize(40),
     borderRadius: scaleSize(20),
     backgroundColor: "#F7CAC9",
     justifyContent: "center",
     alignItems: "center",
     marginRight: scaleSize(12),
+    position: 'relative',
+  },
+  topPerformerAvatar: {
+    backgroundColor: "#FFD700",
+  },
+  topPerformerBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topPerformerBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   avatarText: {
     color: "#FFFFFF",
     fontWeight: "bold",
-    fontSize: scaleSize(10),
+    fontSize: scaleSize(14),
   },
   salesmanDetails: {
     flex: 1,
   },
-  salesmanName: {
-    fontSize: scaleSize(8),
-    fontWeight: "600",
-    color: "#3B3B3B",
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: scaleSize(2),
   },
+  salesmanName: {
+    fontSize: scaleSize(12),
+    fontWeight: "600",
+    color: "#3B3B3B",
+    marginRight: scaleSize(8),
+  },
+  topPerformerChip: {
+    height: scaleSize(16),
+    backgroundColor: '#FFD700',
+  },
+  topPerformerChipText: {
+    fontSize: scaleSize(8),
+    color: '#3B3B3B',
+    fontWeight: 'bold',
+  },
   salesmanEmail: {
-    fontSize: scaleSize(5),
+    fontSize: scaleSize(10),
     color: "#A08B73",
+    marginBottom: scaleSize(2),
+  },
+  salesmanId: {
+    fontSize: scaleSize(9),
+    color: "#666",
+    fontFamily: 'monospace',
     marginBottom: scaleSize(2),
   },
   lastActive: {
-    fontSize: scaleSize(5),
+    fontSize: scaleSize(9),
     color: "#A08B73",
     fontStyle: "italic",
+  },
+  cityChip: {
+    height: scaleSize(25),
+    backgroundColor: '#E8F4FD',
+  },
+  cityChipText: {
+    fontSize: scaleSize(10),
+    color: '#1976D2',
+    fontWeight: '500',
   },
   ordersCell: {
     alignItems: "flex-end",
   },
   ordersTotal: {
-    fontSize: scaleSize(9),
+    fontSize: scaleSize(12),
     fontWeight: "bold",
     color: "#3B3B3B",
   },
   ordersDelivered: {
-    fontSize: scaleSize(7),
+    fontSize: scaleSize(10),
     color: "#4CAF50",
   },
   salesCell: {
     alignItems: "flex-end",
   },
   salesAmount: {
-    fontSize: scaleSize(9),
+    fontSize: scaleSize(12),
     fontWeight: "bold",
     color: "#3B3B3B",
   },
   salesProfit: {
-    fontSize: scaleSize(7),
+    fontSize: scaleSize(10),
     color: "#4CAF50",
   },
   performanceChip: {
-    height: scaleSize(15),
+    height: scaleSize(24),
     backgroundColor: "transparent",
   },
   emptyState: {
@@ -911,23 +949,24 @@ const styles = StyleSheet.create({
     color: "#A08B73",
     fontStyle: "italic",
   },
-  // MODAL OUTER - keep shadows/elevation. IMPORTANT: NO overflow here.
+  input: {
+    marginBottom: scaleSize(12),
+  },
+  // Modal styles
   modalContainer: {
     backgroundColor: "white",
     margin: 20,
     borderRadius: 30,
     height: "80%",
-    // overflow: "hidden", // REMOVED to prevent react-native-paper Surface shadow clipping warning
     padding: 30,
   },
-  // INNER plain View - handles clipping safely
   modalInner: {
     backgroundColor: "white",
     width: "100%",
     height: "100%",
     borderRadius: 30,
-    overflow: "hidden", // safe because this is a plain View
-    padding: 0, // we've already applied padding on modalContainer
+    overflow: "hidden",
+    padding: 0,
   },
   modalHeader: {
     flexDirection: "row",
@@ -966,6 +1005,18 @@ const styles = StyleSheet.create({
   modalPhone: {
     color: "#A08B73",
     fontSize: scaleSize(12),
+  },
+  modalCity: {
+    color: "#1976D2",
+    fontSize: scaleSize(12),
+    fontWeight: '500',
+    marginBottom: scaleSize(2),
+  },
+  modalId: {
+    color: "#666",
+    fontSize: scaleSize(11),
+    fontFamily: 'monospace',
+    marginBottom: scaleSize(2),
   },
   modalMemberSince: {
     color: "#A08B73",
@@ -1043,25 +1094,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   orderId: {
-    fontSize: scaleSize(9),
+    fontSize: scaleSize(11),
     fontWeight: "600",
     color: "#3B3B3B",
     marginBottom: scaleSize(2),
   },
   orderDate: {
-    fontSize: scaleSize(7),
+    fontSize: scaleSize(9),
     color: "#A08B73",
     marginBottom: scaleSize(2),
   },
   orderItems: {
-    fontSize: scaleSize(7),
+    fontSize: scaleSize(9),
     color: "#A08B73",
   },
   orderDetails: {
     alignItems: "flex-end",
   },
   statusChip: {
-    height: scaleSize(20),
+    height: scaleSize(25),
     minWidth: scaleSize(45),
   },
   deliveredChip: {

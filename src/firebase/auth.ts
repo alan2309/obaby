@@ -1,11 +1,11 @@
-// src\firebase\auth.ts
+// src\firebase\auth.ts 
 import { 
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc,collection, addDoc, updateDoc, getDocs, query, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, addDoc, updateDoc, getDocs, query, where } from 'firebase/firestore';
 import { auth, firestore } from './config';
 import { COLLECTIONS, USER_ROLES } from '../utils/constants';
 
@@ -15,6 +15,7 @@ export interface UserData {
   email: string;
   name: string;
   phone: string;
+  city: string; // Added city field
   role: 'admin' | 'salesman' | 'customer';
   approved: boolean;
   createdAt: Date;
@@ -22,20 +23,115 @@ export interface UserData {
   totalProfitGenerated?: number;
   totalDiscountGiven?: number;
   totalSales?: number;
+  salesmanId?: string;
 }
+
+// Generate custom 5-digit alphanumeric ID
+export const generateCustomId = (): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 5; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
+export const registerSalesman = async (
+  email: string, 
+  password: string, 
+  name: string,
+  phone: string,
+  city: string, // Added city parameter
+  maxDiscountPercent: number = 10
+) => {
+  try {
+    // Generate custom ID first
+    const customId = generateCustomId();
+    
+    // Create auth user
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    
+    // Create user document with custom ID
+    const userDoc: UserData = {
+      uid: customId, // Use custom ID instead of Firebase UID
+      email,
+      name,
+      phone,
+      city, // Added city
+      role: USER_ROLES.SALESMAN,
+      approved: true, // Salesmen are auto-approved
+      maxDiscountPercent,
+      totalProfitGenerated: 0,
+      totalDiscountGiven: 0,
+      totalSales: 0,
+      createdAt: new Date(),
+    };
+    
+    // Store with custom ID as document ID
+    await setDoc(doc(firestore, COLLECTIONS.USERS, customId), userDoc);
+    
+    // Update profile
+    await updateProfile(user, {
+      displayName: name,
+    });
+    
+    return userDoc;
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+};
+
+export const registerCustomer = async (
+  email: string, 
+  name: string,
+  phone: string,
+  city: string,
+  salesmanId?: string
+) => {
+  try {
+    // Generate custom ID for the customer (similar to salesman)
+    const customId = generateCustomId();
+    
+    // Create user document in Firestore only (no auth)
+    const userDoc: UserData = {
+      uid: customId, // Use custom ID
+      email,
+      name,
+      phone,
+      city,
+      role: USER_ROLES.CUSTOMER,
+      approved: true, // Customers need approval
+      salesmanId: salesmanId || undefined,
+      createdAt: new Date(),
+    };
+    
+    // Store with custom ID as document ID
+    await setDoc(doc(firestore, COLLECTIONS.USERS, customId), userDoc);
+    
+    console.log('✅ Customer created successfully with ID:', customId);
+    return userDoc;
+  } catch (error: any) {
+    console.error('❌ Error creating customer:', error);
+    throw new Error(error.message);
+  }
+};
 
 export const loginUser = async (email: string, password: string) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
     
-    // Get user data from Firestore
-    const userDoc = await getDoc(doc(firestore, COLLECTIONS.USERS, user.uid));
+    // Get user data from Firestore - search by email since we don't know if it's custom ID or Firebase UID
+    const usersQuery = await getDocs(
+      query(collection(firestore, COLLECTIONS.USERS), where('email', '==', email))
+    );
     
-    if (!userDoc.exists()) {
+    if (usersQuery.empty) {
       throw new Error('User data not found');
     }
     
+    const userDoc = usersQuery.docs[0];
     const userData = userDoc.data() as UserData;
     
     // Check if customer is approved
@@ -44,35 +140,6 @@ export const loginUser = async (email: string, password: string) => {
     }
     
     return userData;
-  } catch (error: any) {
-    throw new Error(error.message);
-  }
-};
-
-export const registerUser = async (
-  email: string, 
-  password: string, 
-  userData: Omit<UserData, 'uid' | 'createdAt'>
-) => {
-  try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    
-    // Create user document in Firestore
-    const userDoc: UserData = {
-      uid: user.uid,
-      ...userData,
-      createdAt: new Date(),
-    };
-    
-    await setDoc(doc(firestore, COLLECTIONS.USERS, user.uid), userDoc);
-    
-    // Update profile
-    await updateProfile(user, {
-      displayName: userData.name,
-    });
-    
-    return userDoc;
   } catch (error: any) {
     throw new Error(error.message);
   }
@@ -92,7 +159,7 @@ export const recordLogin = async (userId: string, userRole: string) => {
   try {
     const loginRecord = {
       salesmanId: userId,
-      date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+      date: new Date().toISOString().split('T')[0],
       loginTime: new Date(),
       logoutTime: null,
       totalHours: 0,
@@ -126,7 +193,7 @@ export const recordLogout = async (userId: string, userRole: string) => {
       
       await updateDoc(doc(firestore, COLLECTIONS.ATTENDANCE, record.id), {
         logoutTime,
-        totalHours: Math.round(totalHours * 100) / 100, // 2 decimal places
+        totalHours: Math.round(totalHours * 100) / 100,
       });
     }
   } catch (error) {

@@ -1,32 +1,54 @@
+// src/screens/admin/CustomerManagement.tsx
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert, RefreshControl } from 'react-native';
-import { Text, Card, Button, Searchbar, ActivityIndicator, Menu, Divider } from 'react-native-paper';
-import { 
-  getUsers, 
-  approveUser, 
-  revokeUserApproval, 
-  deleteUser, 
-  changeUserRole 
-} from '../../firebase/firestore';
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  RefreshControl,
+  useWindowDimensions,
+} from 'react-native';
+import {
+  Text,
+  Card,
+  Button,
+  Searchbar,
+  ActivityIndicator,
+  Chip,
+} from 'react-native-paper';
+import { getUsers } from '../../firebase/firestore';
 import { UserData } from '../../firebase/auth';
 import { auth } from '../../firebase/config';
+import { scaleSize, scaleFont, platformStyle } from '../../utils/constants';
+
+interface SalesmanWithCustomers {
+  salesman: UserData;
+  customers: UserData[];
+}
 
 const CustomerManagement: React.FC = () => {
   const [users, setUsers] = useState<UserData[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<UserData[]>([]);
+  const [salesmenWithCustomers, setSalesmenWithCustomers] = useState<SalesmanWithCustomers[]>([]);
+  const [unassignedCustomers, setUnassignedCustomers] = useState<UserData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [menuVisible, setMenuVisible] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [expandedSalesmen, setExpandedSalesmen] = useState<Set<string>>(new Set());
 
-  // Fetch all users
+  // previous action imports commented out for easy re-enable
+  // import { approveUser, revokeUserApproval, deleteUser, changeUserRole } from '../../firebase/firestore';
+
+  const { width } = useWindowDimensions();
+  const columns = width >= 900 ? 4 : width >= 600 ? 3 : 2; // responsive: 2/3/4
+  const gap = 12;
+
+  // Fetch all users and organize by salesman
   const fetchUsers = async () => {
     try {
       setLoading(true);
       const usersData = await getUsers();
       setUsers(usersData);
-      setFilteredUsers(usersData);
+      organizeUsersBySalesman(usersData);
     } catch (error: any) {
       console.error('Error fetching users:', error);
       Alert.alert('Error', 'Failed to fetch users');
@@ -36,6 +58,45 @@ const CustomerManagement: React.FC = () => {
     }
   };
 
+  // Organize users by salesman
+  const organizeUsersBySalesman = (usersData: UserData[]) => {
+    const salesmen = usersData.filter(user => user.role === 'salesman');
+    const customers = usersData.filter(user => user.role === 'customer');
+
+    const salesmanMap = new Map<string, SalesmanWithCustomers>();
+
+    // Initialize all salesmen
+    salesmen.forEach(salesman => {
+      salesmanMap.set(salesman.uid, {
+        salesman,
+        customers: []
+      });
+    });
+
+    // Assign customers to their salesmen
+    const unassigned: UserData[] = [];
+
+    customers.forEach(customer => {
+      if (customer.salesmanId && salesmanMap.has(customer.salesmanId)) {
+        const salesmanData = salesmanMap.get(customer.salesmanId)!;
+        salesmanData.customers.push(customer);
+      } else {
+        unassigned.push(customer);
+      }
+    });
+
+    // Convert map to array and sort by salesman name
+    const salesmanArray = Array.from(salesmanMap.values()).sort((a, b) =>
+      (a.salesman.name || '').localeCompare(b.salesman.name || '')
+    );
+
+    // Sort unassigned customers by name
+    const sortedUnassigned = unassigned.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    setSalesmenWithCustomers(salesmanArray);
+    setUnassignedCustomers(sortedUnassigned);
+  };
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -43,14 +104,16 @@ const CustomerManagement: React.FC = () => {
   // Filter users based on search query
   useEffect(() => {
     if (searchQuery.trim() === '') {
-      setFilteredUsers(users);
+      organizeUsersBySalesman(users);
     } else {
-      const filtered = users.filter(user =>
-        user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.phone?.includes(searchQuery)
+      const q = searchQuery.toLowerCase();
+      const filteredUsers = users.filter(user =>
+        (user.name || '').toLowerCase().includes(q) ||
+        (user.email || '').toLowerCase().includes(q) ||
+        (user.phone || '').includes(searchQuery) ||
+        (user.city || '').toLowerCase().includes(q)
       );
-      setFilteredUsers(filtered);
+      organizeUsersBySalesman(filteredUsers);
     }
   }, [searchQuery, users]);
 
@@ -59,87 +122,51 @@ const CustomerManagement: React.FC = () => {
     fetchUsers();
   };
 
-  // Handle user approval
+  // Toggle salesman expansion
+  const toggleSalesmanExpansion = (salesmanId: string) => {
+    const newExpanded = new Set(expandedSalesmen);
+    if (newExpanded.has(salesmanId)) {
+      newExpanded.delete(salesmanId);
+    } else {
+      newExpanded.add(salesmanId);
+    }
+    setExpandedSalesmen(newExpanded);
+  };
+
+  // --------------------------
+  // PREVIOUS ACTION FUNCTIONS — COMMENTED OUT FOR SAFETY / EASE OF RE-ENABLE
+  // --------------------------
+  /*
   const handleApproveUser = async (userId: string, userName: string) => {
-    try {
-      setActionLoading(userId);
-      await approveUser(userId);
-      Alert.alert('Success', `${userName} has been approved successfully`);
-      fetchUsers(); // Refresh the list
-    } catch (error: any) {
-      console.error('Error approving user:', error);
-      Alert.alert('Error', error.message || 'Failed to approve user');
-    } finally {
-      setActionLoading(null);
-    }
+    // await approveUser(userId);
+    // fetchUsers();
   };
 
-  // Handle revoke approval
   const handleRevokeApproval = async (userId: string, userName: string) => {
-    try {
-      setActionLoading(userId);
-      await revokeUserApproval(userId);
-      Alert.alert('Success', `Approval revoked for ${userName}`);
-      fetchUsers(); // Refresh the list
-    } catch (error: any) {
-      console.error('Error revoking approval:', error);
-      Alert.alert('Error', error.message || 'Failed to revoke approval');
-    } finally {
-      setActionLoading(null);
-    }
+    // await revokeUserApproval(userId);
+    // fetchUsers();
   };
 
-  // Handle delete user
   const handleDeleteUser = async (userId: string, userName: string) => {
-    try {
-      setActionLoading(userId);
-      await deleteUser(userId);
-      Alert.alert('Success', `${userName} has been deleted successfully`);
-      fetchUsers(); // Refresh the list
-    } catch (error: any) {
-      console.error('Error deleting user:', error);
-      Alert.alert('Error', error.message || 'Failed to delete user');
-    } finally {
-      setActionLoading(null);
-    }
+    // await deleteUser(userId);
+    // fetchUsers();
   };
 
-  // Handle role change
   const handleRoleChange = async (userId: string, newRole: 'admin' | 'salesman' | 'customer', userName: string) => {
-    try {
-      setActionLoading(userId);
-      await changeUserRole(userId, newRole);
-      Alert.alert('Success', `${userName} is now a ${newRole}`);
-      fetchUsers(); // Refresh the list
-    } catch (error: any) {
-      console.error('Error changing role:', error);
-      Alert.alert('Error', error.message || 'Failed to change user role');
-    } finally {
-      setActionLoading(null);
-    }
+    // await changeUserRole(userId, newRole);
+    // fetchUsers();
   };
 
-  // Show confirmation dialog for actions
-  const showConfirmation = (
-    title: string,
-    message: string,
-    onConfirm: () => void,
-    confirmText = 'Confirm',
-    destructive = false
-  ) => {
-    Alert.alert(
-      title,
-      message,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: confirmText, 
-          style: destructive ? 'destructive' : 'default',
-          onPress: onConfirm
-        }
-      ]
-    );
+  const showConfirmation = (title: string, message: string, onConfirm: () => void) => {
+    // Alert.alert(title, message, [
+    //   { text: 'Cancel', style: 'cancel' },
+    //   { text: 'Confirm', onPress: onConfirm },
+    // ]);
   };
+  */
+  // --------------------------
+  // end commented-out action functions
+  // --------------------------
 
   // Get status badge color
   const getStatusColor = (user: UserData) => {
@@ -155,8 +182,11 @@ const CustomerManagement: React.FC = () => {
     return 'Approved';
   };
 
-  // Check if action is loading for a specific user
-  const isActionLoading = (userId: string) => actionLoading === userId;
+  // Get total statistics
+  const totalCustomers = users.filter(u => u.role === 'customer').length;
+  const approvedCustomers = users.filter(u => u.role === 'customer' && u.approved).length;
+  const pendingCustomers = users.filter(u => u.role === 'customer' && !u.approved).length;
+  const totalSalesmen = users.filter(u => u.role === 'salesman').length;
 
   if (loading) {
     return (
@@ -172,28 +202,34 @@ const CustomerManagement: React.FC = () => {
       <Text variant="headlineMedium" style={styles.title}>
         Customer Management
       </Text>
-      
-      <Searchbar
-        placeholder="Search users by name, email, or phone..."
-        onChangeText={setSearchQuery}
-        value={searchQuery}
-        style={styles.searchBar}
-      />
+
+      <Card style={[styles.searchAreaCard]}>
+        {/* Wrap Card.Content children in a plain View so we can use overflow there if needed
+            This prevents setting overflow: 'hidden' on the Card/Surface itself (preserves shadow) */}
+        <View style={styles.cardInnerWrap}>
+          <Searchbar
+            placeholder="Search customers by name, city, mail..."
+            onChangeText={setSearchQuery}
+            value={searchQuery}
+            style={styles.searchBar}
+          />
+        </View>
+      </Card>
 
       <Card style={styles.card}>
-        <Card.Content style={styles.cardContent}>
+        <View style={styles.cardInnerWrap}>
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
               <Text variant="titleLarge" style={styles.statNumber}>
-                {users.length}
+                {totalCustomers}
               </Text>
               <Text variant="bodyMedium" style={styles.statLabel}>
-                Total Users
+                Total Customers
               </Text>
             </View>
             <View style={styles.statItem}>
               <Text variant="titleLarge" style={styles.statNumber}>
-                {users.filter(u => u.approved).length}
+                {approvedCustomers}
               </Text>
               <Text variant="bodyMedium" style={styles.statLabel}>
                 Approved
@@ -201,191 +237,213 @@ const CustomerManagement: React.FC = () => {
             </View>
             <View style={styles.statItem}>
               <Text variant="titleLarge" style={styles.statNumber}>
-                {users.filter(u => !u.approved).length}
+                {pendingCustomers}
               </Text>
               <Text variant="bodyMedium" style={styles.statLabel}>
                 Pending
               </Text>
             </View>
+            <View style={styles.statItem}>
+              <Text variant="titleLarge" style={styles.statNumber}>
+                {totalSalesmen}
+              </Text>
+              <Text variant="bodyMedium" style={styles.statLabel}>
+                Salesmen
+              </Text>
+            </View>
           </View>
-        </Card.Content>
+        </View>
       </Card>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <Card style={styles.usersCard}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.sectionTitle}>
-              User Accounts ({filteredUsers.length})
-            </Text>
-            
-            {filteredUsers.length === 0 ? (
-              <Text style={styles.noUsersText}>
-                {searchQuery ? 'No users found matching your search.' : 'No users found.'}
-              </Text>
-            ) : (
-              filteredUsers.map((user) => (
-                <Card key={user.uid} style={styles.userCard}>
-                  <Card.Content>
-                    <View style={styles.userHeader}>
-                      <View style={styles.userInfo}>
-                        <Text variant="titleMedium" style={styles.userName}>
-                          {user.name}
-                        </Text>
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(user) }]}>
-                          <Text style={styles.statusText}>
-                            {getStatusText(user)}
-                          </Text>
-                        </View>
-                      </View>
-                      
-                      <Menu
-                        visible={menuVisible === user.uid}
-                        onDismiss={() => setMenuVisible(null)}
-                        anchor={
-                          <Button 
-                            mode="outlined" 
-                            onPress={() => setMenuVisible(user.uid)}
-                            icon="dots-vertical"
-                            disabled={isActionLoading(user.uid!)}
-                            loading={isActionLoading(user.uid!)}
-                          >
-                            Actions
-                          </Button>
-                        }
-                      >
-                        {user.role !== 'admin' && (
-                          <>
-                            {!user.approved ? (
-                              <Menu.Item
-                                leadingIcon="check"
-                                title="Approve User"
-                                onPress={() => {
-                                  setMenuVisible(null);
-                                  showConfirmation(
-                                    'Approve User',
-                                    `Are you sure you want to approve ${user.name}?`,
-                                    () => handleApproveUser(user.uid!, user.name)
-                                  );
-                                }}
-                              />
-                            ) : (
-                              <Menu.Item
-                                leadingIcon="close"
-                                title="Revoke Approval"
-                                onPress={() => {
-                                  setMenuVisible(null);
-                                  showConfirmation(
-                                    'Revoke Approval',
-                                    `Are you sure you want to revoke approval for ${user.name}?`,
-                                    () => handleRevokeApproval(user.uid!, user.name),
-                                    'Revoke',
-                                    true
-                                  );
-                                }}
-                              />
-                            )}
-                            <Divider />
-                            <Menu.Item
-                              leadingIcon="account-convert"
-                              title="Make Admin"
-                              onPress={() => {
-                                setMenuVisible(null);
-                                showConfirmation(
-                                  'Make Admin',
-                                  `Are you sure you want to make ${user.name} an admin?`,
-                                  () => handleRoleChange(user.uid!, 'admin', user.name)
-                                );
-                              }}
-                            />
-                            <Menu.Item
-                              leadingIcon="account"
-                              title="Make Salesman"
-                              onPress={() => {
-                                setMenuVisible(null);
-                                showConfirmation(
-                                  'Make Salesman',
-                                  `Are you sure you want to make ${user.name} a salesman?`,
-                                  () => handleRoleChange(user.uid!, 'salesman', user.name)
-                                );
-                              }}
-                            />
-                            <Menu.Item
-                              leadingIcon="account-outline"
-                              title="Make Customer"
-                              onPress={() => {
-                                setMenuVisible(null);
-                                showConfirmation(
-                                  'Make Customer',
-                                  `Are you sure you want to make ${user.name} a customer?`,
-                                  () => handleRoleChange(user.uid!, 'customer', user.name)
-                                );
-                              }}
-                            />
-                            <Divider />
-                          </>
-                        )}
-                        
-                        {user.uid !== auth.currentUser?.uid && (
-                          <Menu.Item
-                            leadingIcon="delete"
-                            title="Delete Account"
-                            titleStyle={{ color: 'red' }}
-                            onPress={() => {
-                              setMenuVisible(null);
-                              showConfirmation(
-                                'Delete User',
-                                `Are you sure you want to delete ${user.name}? This action cannot be undone.`,
-                                () => handleDeleteUser(user.uid!, user.name),
-                                'Delete',
-                                true
-                              );
-                            }}
-                          />
-                        )}
-                      </Menu>
-                    </View>
+        {/* Salesmen with their customers */}
+        {salesmenWithCustomers.map(({ salesman, customers }) => (
+          <Card key={salesman.uid} style={styles.salesmanCard}>
+            <View style={styles.cardInnerWrap}>
+              <View style={styles.salesmanHeader}>
+                <View style={styles.salesmanInfo}>
+                  <Text variant="titleMedium" style={styles.salesmanName}>
+                    {salesman.name}
+                  </Text>
+                  <View style={styles.salesmanDetails}>
+                    <Text style={styles.salesmanEmail}>{salesman.email}</Text>
+                    <Text style={styles.salesmanCity}>📍 {salesman.city || 'No city'}</Text>
+                    <Text style={styles.salesmanId}>ID: {salesman.uid}</Text>
+                  </View>
+                </View>
+                <View style={styles.salesmanStats}>
+                  <Chip mode="outlined" style={styles.customerCountChip}>
+                    {customers.length} customers
+                  </Chip>
 
-                    <View style={styles.userDetails}>
-                      <Text style={styles.userDetail}>
-                        <Text style={styles.detailLabel}>Email: </Text>
-                        {user.email}
-                      </Text>
-                      <Text style={styles.userDetail}>
-                        <Text style={styles.detailLabel}>Phone: </Text>
-                        {user.phone || 'Not provided'}
-                      </Text>
-                      <Text style={styles.userDetail}>
-                        <Text style={styles.detailLabel}>Role: </Text>
-                        {user.role}
-                      </Text>
-                      {user.role === 'salesman' && (
-                        <>
-                          <Text style={styles.userDetail}>
-                            <Text style={styles.detailLabel}>Max Discount: </Text>
-                            {user.maxDiscountPercent || 0}%
-                          </Text>
-                          <Text style={styles.userDetail}>
-                            <Text style={styles.detailLabel}>Total Sales: </Text>
-                            ${user.totalSales || 0}
-                          </Text>
-                        </>
-                      )}
-                      <Text style={styles.userDetail}>
-                        <Text style={styles.detailLabel}>Joined: </Text>
-                        {user.createdAt?.toLocaleDateString()}
-                      </Text>
+                  {/* Actions removed from UI as requested */}
+
+                  <Button
+                    mode="text"
+                    onPress={() => toggleSalesmanExpansion(salesman.uid)}
+                    icon={expandedSalesmen.has(salesman.uid) ? "chevron-up" : "chevron-down"}
+                  >
+                    {expandedSalesmen.has(salesman.uid) ? "Hide" : "Show"}
+                  </Button>
+                </View>
+              </View>
+
+              {expandedSalesmen.has(salesman.uid) && (
+                <View style={styles.customersContainer}>
+                  {customers.length === 0 ? (
+                    <Text style={styles.noCustomersText}>
+                      No customers assigned to this salesman
+                    </Text>
+                  ) : (
+                    <View style={[styles.customersGrid, { marginHorizontal: -Math.round(gap / 2) }]}>
+                      {customers.map((customer) => (
+                        <View
+                          key={customer.uid}
+                          style={[
+                            styles.customerWrapper,
+                            {
+                              width: `${100 / columns}%`,
+                              paddingHorizontal: Math.round(gap / 2),
+                              marginBottom: gap,
+                            },
+                          ]}
+                        >
+                          <Card style={styles.customerCard}>
+                            {/* wrap content in inner view to allow overflow hiding without clipping Card shadow */}
+                            <View style={styles.cardInnerWrap}>
+                              <Card.Content>
+                                <View style={styles.customerHeader}>
+                                  <View style={styles.customerInfo}>
+                                    <Text variant="titleSmall" style={styles.customerName}>
+                                      {customer.name}
+                                    </Text>
+                                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(customer) }]}>
+                                      <Text style={styles.statusText}>
+                                        {getStatusText(customer)}
+                                      </Text>
+                                    </View>
+                                  </View>
+
+                                  {/* Actions removed from UI as requested */}
+                                </View>
+
+                                <View style={styles.customerDetails}>
+                                  <Text style={styles.customerDetail}>
+                                    <Text style={styles.detailLabel}>Email: </Text>
+                                    {customer.email}
+                                  </Text>
+                                  <Text style={styles.customerDetail}>
+                                    <Text style={styles.detailLabel}>Phone: </Text>
+                                    {customer.phone || 'Not provided'}
+                                  </Text>
+                                  <Text style={styles.customerDetail}>
+                                    <Text style={styles.detailLabel}>City: </Text>
+                                    {customer.city || 'Not provided'}
+                                  </Text>
+                                  <Text style={styles.customerDetail}>
+                                    <Text style={styles.detailLabel}>Joined: </Text>
+                                    {customer.createdAt?.toLocaleDateString()}
+                                  </Text>
+                                </View>
+                              </Card.Content>
+                            </View>
+                          </Card>
+                        </View>
+                      ))}
                     </View>
-                  </Card.Content>
-                </Card>
-              ))
-            )}
-          </Card.Content>
-        </Card>
+                  )}
+                </View>
+              )}
+            </View>
+          </Card>
+        ))}
+
+        {/* Unassigned customers */}
+        {unassignedCustomers.length > 0 && (
+          <Card style={styles.unassignedCard}>
+            <View style={styles.cardInnerWrap}>
+              <Text variant="titleLarge" style={styles.sectionTitle}>
+                Unassigned Customers ({unassignedCustomers.length})
+              </Text>
+
+              <View style={[styles.customersGrid, { marginHorizontal: -Math.round(gap / 2) }]}>
+                {unassignedCustomers.map((customer) => (
+                  <View
+                    key={customer.uid}
+                    style={[
+                      styles.customerWrapper,
+                      {
+                        width: `${100 / columns}%`,
+                        paddingHorizontal: Math.round(gap / 2),
+                        marginBottom: gap,
+                      },
+                    ]}
+                  >
+                    <Card style={styles.customerCard}>
+                      <View style={styles.cardInnerWrap}>
+                        <Card.Content>
+                          <View style={styles.customerHeader}>
+                            <View style={styles.customerInfo}>
+                              <Text variant="titleSmall" style={styles.customerName}>
+                                {customer.name}
+                              </Text>
+                              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(customer) }]}>
+                                <Text style={styles.statusText}>
+                                  {getStatusText(customer)}
+                                </Text>
+                              </View>
+                              <Chip mode="outlined" compact style={styles.unassignedChip}>
+                                No Salesman
+                              </Chip>
+                            </View>
+
+                            {/* Actions removed from UI as requested */}
+                          </View>
+
+                          <View style={styles.customerDetails}>
+                            <Text style={styles.customerDetail}>
+                              <Text style={styles.detailLabel}>Email: </Text>
+                              {customer.email}
+                            </Text>
+                            <Text style={styles.customerDetail}>
+                              <Text style={styles.detailLabel}>Phone: </Text>
+                              {customer.phone || 'Not provided'}
+                            </Text>
+                            <Text style={styles.customerDetail}>
+                              <Text style={styles.detailLabel}>City: </Text>
+                              {customer.city || 'Not provided'}
+                            </Text>
+                            <Text style={styles.customerDetail}>
+                              <Text style={styles.detailLabel}>Joined: </Text>
+                              {customer.createdAt?.toLocaleDateString()}
+                            </Text>
+                          </View>
+                        </Card.Content>
+                      </View>
+                    </Card>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </Card>
+        )}
+
+        {salesmenWithCustomers.length === 0 && unassignedCustomers.length === 0 && (
+          <Card style={styles.noDataCard}>
+            <View style={styles.cardInnerWrap}>
+              <Card.Content>
+                <Text style={styles.noUsersText}>
+                  {searchQuery ? 'No customers found matching your search.' : 'No customers found.'}
+                </Text>
+              </Card.Content>
+            </View>
+          </Card>
+        )}
       </ScrollView>
     </View>
   );
@@ -394,27 +452,46 @@ const CustomerManagement: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    padding: platformStyle.padding ?? 16,
     backgroundColor: '#F5EDE0',
   },
   center: {
     justifyContent: 'center',
     alignItems: 'center',
   },
+
+  // cardInnerWrap is the wrapper INSIDE every Card where we put overflow if needed.
+  // We purposefully do NOT set overflow: 'hidden' on the Card itself so shadows render correctly.
+  cardInnerWrap: {
+    borderRadius: scaleSize(8),
+    overflow: 'hidden',
+  },
+
   title: {
-    marginBottom: 16,
-    fontWeight: 'bold',
+    marginBottom: scaleSize(12),
+    fontWeight: '700',
     color: '#333',
+    textAlign: 'center',
+    fontSize: scaleFont(18),
   },
   searchBar: {
-    marginBottom: 16,
     backgroundColor: '#fff',
+    color: '#00000014',
   },
+
+  searchAreaCard: {
+    marginBottom: scaleSize(12),
+    borderRadius: scaleSize(8),
+  },
+
   card: {
-    marginBottom: 16,
+    marginBottom: scaleSize(12),
+    borderRadius: scaleSize(10),
+    padding:scaleSize(10),
+    // no overflow here — wrapper handles clipping
   },
   cardContent: {
-    paddingVertical: 8,
+    paddingVertical: scaleSize(8),
   },
   statsContainer: {
     flexDirection: 'row',
@@ -425,72 +502,169 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statNumber: {
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#333',
+    fontSize: scaleFont(18),
   },
   statLabel: {
     color: '#666',
-    marginTop: 4,
+    marginTop: scaleSize(4),
+    fontSize: scaleFont(12),
   },
   scrollView: {
     flex: 1,
   },
-  usersCard: {
-    marginBottom: 16,
+  salesmanCard: {
+    marginBottom: scaleSize(12),
+    backgroundColor: '#FAF9F6',
+    borderRadius: scaleSize(8),
+    // no overflow on card
   },
-  sectionTitle: {
-    marginBottom: 16,
-    fontWeight: 'bold',
+  unassignedCard: {
+    marginBottom: scaleSize(12),
+    backgroundColor: '#FFF9F2',
+    borderRadius: scaleSize(8),
+  },
+  noDataCard: {
+    marginBottom: scaleSize(12),
+  },
+  salesmanHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: scaleSize(12),
+  },
+  salesmanInfo: {
+    flex: 1,
+  },
+  salesmanName: {
+    fontWeight: '700',
+    marginBottom: scaleSize(4),
     color: '#333',
+    fontSize: scaleFont(16),
+  },
+  salesmanDetails: {
+    marginTop: scaleSize(4),
+  },
+  salesmanEmail: {
+    fontSize: scaleFont(12),
+    color: '#666',
+    marginBottom: scaleSize(2),
+  },
+  salesmanCity: {
+    fontSize: scaleFont(12),
+    color: '#1976D2',
+    marginBottom: scaleSize(2),
+  },
+  salesmanId: {
+    fontSize: scaleFont(11),
+    color: '#888',
+    fontFamily: 'monospace',
+  },
+  salesmanStats: {
+    alignItems: 'flex-end',
+  },
+  customerCountChip: {
+    marginBottom: scaleSize(8),
+    color: '#1976D2',
+  },
+
+  // customers responsive grid
+  customersContainer: {
+    marginTop: scaleSize(12),
+    paddingTop: scaleSize(12),
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    paddingHorizontal: scaleSize(8),
+  },
+  customersGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+  },
+  customerWrapper: {
+    // width set inline according to columns
+    paddingVertical: 4,
+    minWidth: 0,
+  },
+  customerCard: {
+    marginBottom: scaleSize(8),
+    backgroundColor: '#fff',
+    borderLeftWidth: scaleSize(3),
+    borderLeftColor: '#F7CAC9',
+    borderRadius: scaleSize(8),
+    // no overflow here
+  },
+
+  customerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingTop: scaleSize(10),
+    marginBottom: scaleSize(8),
+  },
+  customerInfo: {
+    flex: 1,
+  },
+  customerName: {
+    fontWeight: '700',
+    marginBottom: scaleSize(4),
+    fontSize: scaleFont(14),
+  },
+  statusBadge: {
+    paddingHorizontal: scaleSize(8),
+    paddingVertical: scaleSize(4),
+    borderRadius: scaleSize(12),
+    alignSelf: 'flex-start',
+    marginBottom: scaleSize(4),
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: scaleFont(11),
+    fontWeight: '700',
+  },
+  unassignedChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFF3E0',
+    marginTop: scaleSize(4),
+  },
+  customerDetails: {
+    marginTop: scaleSize(4),
+    paddingBottom: scaleSize(8),
+  },
+  customerDetail: {
+    marginBottom: scaleSize(6),
+    fontSize: scaleFont(12),
+  },
+  detailLabel: {
+    fontWeight: '700',
+    color: '#333',
+  },
+  noCustomersText: {
+    textAlign: 'center',
+    color: '#666',
+    fontStyle: 'italic',
+    padding: scaleSize(16),
+    fontSize: scaleFont(12),
   },
   noUsersText: {
     textAlign: 'center',
     color: '#666',
     fontStyle: 'italic',
-    marginVertical: 20,
+    marginVertical: scaleSize(20),
+    fontSize: scaleFont(12),
   },
-  userCard: {
-    marginBottom: 12,
-    backgroundColor: '#fff',
-  },
-  userHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  userDetails: {
-    marginTop: 8,
-  },
-  userDetail: {
-    marginBottom: 4,
-    fontSize: 14,
-  },
-  detailLabel: {
-    fontWeight: 'bold',
+  sectionTitle: {
+    marginBottom: scaleSize(12),
+    fontWeight: '700',
     color: '#333',
+    fontSize: scaleFont(16),
+    padding: scaleSize(12),
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: scaleSize(12),
     color: '#666',
+    fontSize: scaleFont(12),
   },
 });
 

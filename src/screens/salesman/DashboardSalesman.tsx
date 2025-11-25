@@ -13,7 +13,6 @@ import { useAuth } from "../../context/AuthContext";
 import {
   Order,
   getOrdersBySalesman,
-  getAttendance,
 } from "../../firebase/firestore";
 import {
   calculateSalesmanPerformance,
@@ -26,7 +25,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const DashboardSalesman: React.FC = () => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [attendance, setAttendance] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,28 +44,17 @@ const DashboardSalesman: React.FC = () => {
 
       console.log("🔄 Loading salesman data for user:", user.uid);
 
-      const [ordersData, attendanceData] = await Promise.all([
-        getOrdersBySalesman(user.uid).catch((err) => {
-          console.log(
-            "⚠️ Orders loading failed, using empty array:",
-            err.message
-          );
-          return [];
-        }),
-        getAttendance(user.uid).catch((err) => {
-          console.log(
-            "⚠️ Attendance loading failed, using empty array:",
-            err.message
-          );
-          return [];
-        }),
-      ]);
+      const ordersData = await getOrdersBySalesman(user.uid).catch((err) => {
+        console.log(
+          "⚠️ Orders loading failed, using empty array:",
+          err.message
+        );
+        return [];
+      });
 
       console.log("✅ Orders loaded:", ordersData.length);
-      console.log("✅ Attendance records:", attendanceData.length);
 
       setOrders(ordersData);
-      setAttendance(attendanceData);
       setError(null);
     } catch (error: any) {
       console.error("❌ Error loading salesman data:", error);
@@ -106,14 +93,6 @@ const DashboardSalesman: React.FC = () => {
       borderRadius: 16,
     },
   };
-
-  // Safe attendance calculation
-  const totalHours = attendance.reduce(
-    (sum, record) => sum + (record.totalHours || 0),
-    0
-  );
-  const averageHours =
-    attendance.length > 0 ? totalHours / attendance.length : 0;
 
   if (loading) {
     return (
@@ -206,31 +185,6 @@ const DashboardSalesman: React.FC = () => {
               yAxisLabel="$"
               yAxisSuffix=""
             />
-          </Card.Content>
-        </Card>
-      )}
-
-      {/* Attendance Stats - Only show if we have attendance data */}
-      {attendance.length > 0 && (
-        <Card style={styles.statsCard}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.statsTitle}>
-              Attendance Summary
-            </Text>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{attendance.length}</Text>
-                <Text style={styles.statLabel}>Days Worked</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{totalHours.toFixed(1)}</Text>
-                <Text style={styles.statLabel}>Total Hours</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{averageHours.toFixed(1)}</Text>
-                <Text style={styles.statLabel}>Avg Hours/Day</Text>
-              </View>
-            </View>
           </Card.Content>
         </Card>
       )}
@@ -378,32 +332,6 @@ const styles = StyleSheet.create({
   chart: {
     marginVertical: scaleSize(8),
     borderRadius: scaleSize(16),
-  },
-  statsCard: {
-    marginBottom: scaleSize(20),
-    backgroundColor: "#FAF9F6",
-  },
-  statsTitle: {
-    textAlign: "center",
-    marginBottom: scaleSize(16),
-    color: "#3B3B3B",
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  statItem: {
-    alignItems: "center",
-  },
-  statNumber: {
-    fontSize: scaleSize(18),
-    fontWeight: "bold",
-    color: "#F7CAC9",
-    marginBottom: scaleSize(4),
-  },
-  statLabel: {
-    fontSize: scaleSize(11),
-    color: "#A08B73",
   },
   ordersCard: {
     marginBottom: scaleSize(20),
