@@ -60,6 +60,61 @@ interface ColorGroup {
   sizes: Array<{ size: string; stock: number; variant: ProductVariant }>;
 }
 
+// Size ordering function (same as ProductCatalog)
+const getSizeOrder = (size: string): number => {
+  const sizeMap: { [key: string]: number } = {
+    'XS': 0,
+    'S': 1,
+    'M': 2,
+    'L': 3,
+    'XL': 4,
+    'XXL': 5,
+    'XXXL': 6,
+    '2XL': 5,
+    '3XL': 6,
+    '4XL': 7,
+    '5XL': 8,
+    '6XL': 9,
+    '28': 10,
+    '30': 11,
+    '32': 12,
+    '34': 13,
+    '36': 14,
+    '38': 15,
+    '40': 16,
+    '42': 17,
+    '44': 18,
+    '46': 19,
+    '48': 20,
+    '50': 21,
+  };
+
+  // Convert to uppercase and trim
+  const normalizedSize = size.toUpperCase().trim();
+  
+  // Check if it's in our predefined order
+  if (sizeMap[normalizedSize] !== undefined) {
+    return sizeMap[normalizedSize];
+  }
+
+  // If it's a number (like "28", "30", etc.), convert to number and add offset
+  const numericSize = parseInt(normalizedSize);
+  if (!isNaN(numericSize)) {
+    return numericSize + 100; // Add offset to separate from letter sizes
+  }
+
+  // For any other sizes, put them at the end
+  return 1000;
+};
+
+const sortSizes = (sizes: Array<{ size: string; stock: number; variant: ProductVariant }>) => {
+  return sizes.sort((a, b) => {
+    const orderA = getSizeOrder(a.size);
+    const orderB = getSizeOrder(b.size);
+    return orderA - orderB;
+  });
+};
+
 const ProductDetailScreen: React.FC = () => {
   const route = useRoute<ProductDetailRouteProp>();
   const navigation = useNavigation<NavigationProp>();
@@ -110,7 +165,7 @@ const { user } = useAuth();
     "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400",
   ];
 
-  // Group variants by color
+  // Group variants by color with proper size ordering
   const colorGroups = useMemo((): ColorGroup[] => {
     const groups: { [key: string]: ColorGroup } = {};
     
@@ -133,18 +188,9 @@ const { user } = useAuth();
       });
     });
     
-    // Sort sizes within each color group
+    // Sort sizes within each color group using our size ordering
     Object.values(groups).forEach(group => {
-      group.sizes.sort((a, b) => {
-        // Sort by size number if possible, otherwise alphabetically
-        const aNum = parseInt(a.size);
-        const bNum = parseInt(b.size);
-        
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-          return aNum - bNum;
-        }
-        return a.size.localeCompare(b.size);
-      });
+      group.sizes = sortSizes(group.sizes);
     });
     
     return Object.values(groups).sort((a, b) => a.color.localeCompare(b.color));

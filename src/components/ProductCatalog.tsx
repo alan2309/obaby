@@ -37,6 +37,65 @@ interface ColorGroup {
 const MIN_CARD_TABLET = 240;
 const MIN_CARD_SMALL = 140;
 const MIN_CARD_DEFAULT = 180;
+const MIN_CARD_LAPTOP = 200; // Smaller minimum for laptop screens
+
+// Add a new function to detect laptop-like screens
+const isLaptopScreen = (width: number) => width >= 1200;
+
+// Size ordering function
+const getSizeOrder = (size: string): number => {
+  const sizeMap: { [key: string]: number } = {
+    'XS': 0,
+    'S': 1,
+    'M': 2,
+    'L': 3,
+    'XL': 4,
+    'XXL': 5,
+    'XXXL': 6,
+    '2XL': 5,
+    '3XL': 6,
+    '4XL': 7,
+    '5XL': 8,
+    '6XL': 9,
+    '28': 10,
+    '30': 11,
+    '32': 12,
+    '34': 13,
+    '36': 14,
+    '38': 15,
+    '40': 16,
+    '42': 17,
+    '44': 18,
+    '46': 19,
+    '48': 20,
+    '50': 21,
+  };
+
+  // Convert to uppercase and trim
+  const normalizedSize = size.toUpperCase().trim();
+  
+  // Check if it's in our predefined order
+  if (sizeMap[normalizedSize] !== undefined) {
+    return sizeMap[normalizedSize];
+  }
+
+  // If it's a number (like "28", "30", etc.), convert to number and add offset
+  const numericSize = parseInt(normalizedSize);
+  if (!isNaN(numericSize)) {
+    return numericSize + 100; // Add offset to separate from letter sizes
+  }
+
+  // For any other sizes, put them at the end
+  return 1000;
+};
+
+const sortSizes = (sizes: Array<{ size: string; stock: number; variant: any }>) => {
+  return sizes.sort((a, b) => {
+    const orderA = getSizeOrder(a.size);
+    const orderB = getSizeOrder(b.size);
+    return orderA - orderB;
+  });
+};
 
 const ProductCard = React.memo(
   ({
@@ -177,7 +236,7 @@ const SizeSelectionModal: React.FC<{
   const [quantity, setQuantity] = useState<number>(1);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
 
-  // Group variants by color
+  // Group variants by color and sort sizes
   const colorGroups = useMemo((): ColorGroup[] => {
     if (!product?.sizes) return [];
     
@@ -202,17 +261,9 @@ const SizeSelectionModal: React.FC<{
       });
     });
     
-    // Sort sizes within each color group
+    // Sort sizes within each color group using our size ordering
     Object.values(groups).forEach(group => {
-      group.sizes.sort((a, b) => {
-        const aNum = parseInt(a.size);
-        const bNum = parseInt(b.size);
-        
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-          return aNum - bNum;
-        }
-        return a.size.localeCompare(b.size);
-      });
+      group.sizes = sortSizes(group.sizes);
     });
     
     return Object.values(groups).sort((a, b) => a.color.localeCompare(b.color));
@@ -459,10 +510,21 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
     loadProducts();
   }, [loadProducts]);
 
-  // responsive columns and card width
+  // responsive columns and card width - UPDATED FOR LAPTOP SCREENS
   const { numColumns, cardWidth } = useMemo(() => {
-    const MIN_CARD = isTablet ? MIN_CARD_TABLET : isSmallDevice ? MIN_CARD_SMALL : MIN_CARD_DEFAULT;
-    const maxColumns = isTablet ? 3 : 2;
+    const laptopScreen = isLaptopScreen(windowWidth);
+    
+    // Use appropriate minimum card width based on screen size
+    const MIN_CARD = laptopScreen 
+      ? MIN_CARD_LAPTOP 
+      : isTablet 
+        ? MIN_CARD_TABLET 
+        : isSmallDevice 
+          ? MIN_CARD_SMALL 
+          : MIN_CARD_DEFAULT;
+    
+    // Increase max columns for laptop screens
+    const maxColumns = laptopScreen ? 4 : isTablet ? 3 : 2;
     const calculated = Math.floor(windowWidth / MIN_CARD) || 1;
     const cols = Math.min(Math.max(calculated, 1), maxColumns);
 
@@ -471,6 +533,8 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
     const available = windowWidth - horizontalPadding - gapTotal;
     const cWidth = Math.floor(available / cols);
 
+    console.log(`Screen: ${windowWidth}px, Columns: ${cols}, CardWidth: ${cWidth}px, Laptop: ${laptopScreen}`);
+    
     return { numColumns: cols, cardWidth: cWidth };
   }, [windowWidth]);
 
