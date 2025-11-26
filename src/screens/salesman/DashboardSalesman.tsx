@@ -143,7 +143,7 @@ const DashboardSalesman: React.FC = () => {
         <Card style={styles.metricCard}>
           <Card.Content style={styles.metricContent}>
             <Text style={styles.metricValue}>
-              ${performance.totalSales.toFixed(0)}
+              ₹{performance.totalSales.toFixed(0)}
             </Text>
             <Text style={styles.metricLabel}>Total Sales</Text>
           </Card.Content>
@@ -152,7 +152,7 @@ const DashboardSalesman: React.FC = () => {
         <Card style={styles.metricCard}>
           <Card.Content style={styles.metricContent}>
             <Text style={styles.metricValue}>
-              ${performance.totalProfit.toFixed(0)}
+              ₹{performance.totalProfit.toFixed(0)}
             </Text>
             <Text style={styles.metricLabel}>Total Profit</Text>
           </Card.Content>
@@ -182,7 +182,7 @@ const DashboardSalesman: React.FC = () => {
               chartConfig={chartConfig}
               style={styles.chart}
               showValuesOnTopOfBars
-              yAxisLabel="$"
+              yAxisLabel="₹"
               yAxisSuffix=""
             />
           </Card.Content>
@@ -202,12 +202,12 @@ const DashboardSalesman: React.FC = () => {
                   Order #{order.id?.substring(0, 8)}
                 </Text>
                 <Text style={styles.orderDate}>
-                  {order.createdAt.toLocaleDateString()}
+                  {order.createdAt?.toLocaleDateString?.() || 'N/A'}
                 </Text>
               </View>
               <View style={styles.orderDetails}>
                 <Text style={styles.orderAmount}>
-                  ${order.totalAmount.toFixed(2)}
+                  ₹{(order.totalAmount || 0).toFixed(2)}
                 </Text>
                 <Chip
                   mode="outlined"
@@ -218,7 +218,7 @@ const DashboardSalesman: React.FC = () => {
                   ]}
                   textStyle={styles.orderStatusText}
                 >
-                  <Text>{order.status}</Text>
+                  {order.status || 'Unknown'}
                 </Chip>
               </View>
             </View>
@@ -231,33 +231,6 @@ const DashboardSalesman: React.FC = () => {
               </Text>
             </View>
           )}
-        </Card.Content>
-      </Card>
-
-      {/* Quick Actions */}
-      <Card style={styles.actionsCard}>
-        <Card.Content>
-          <Text variant="titleLarge" style={styles.actionsTitle}>
-            Quick Actions
-          </Text>
-          <View style={styles.actionsRow}>
-            <Button
-              mode="contained"
-              style={styles.actionButton}
-              icon="plus"
-              onPress={() => console.log("Navigate to create order")}
-            >
-              <Text>New Order</Text>
-            </Button>
-            <Button
-              mode="outlined"
-              style={styles.actionButton}
-              icon="refresh"
-              onPress={loadData}
-            >
-              <Text>Refresh Data</Text>
-            </Button>
-          </View>
         </Card.Content>
       </Card>
     </ScrollView>
@@ -315,7 +288,7 @@ const styles = StyleSheet.create({
     marginBottom: scaleSize(6),
   },
   metricChip: {
-    height: scaleSize(18),
+    height: scaleSize(24),
     backgroundColor: "#E3F2FD",
     justifyContent: "center",
     alignContent: "center",
@@ -346,7 +319,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: scaleSize(8),
+    paddingVertical: scaleSize(12), // Increased from 8
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
@@ -354,26 +327,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   orderId: {
-    fontSize: scaleSize(8),
+    fontSize: scaleSize(14), // Increased from 8
     fontWeight: "600",
     color: "#3B3B3B",
-    marginBottom: scaleSize(2),
+    marginBottom: scaleSize(4), // Increased from 2
   },
   orderDate: {
-    fontSize: scaleSize(6),
+    fontSize: scaleSize(12), // Increased from 6
     color: "#A08B73",
   },
   orderDetails: {
     alignItems: "flex-end",
   },
   orderAmount: {
-    fontSize: scaleSize(8),
+    fontSize: scaleSize(14), // Increased from 8
     fontWeight: "600",
     color: "#E6C76E",
-    marginBottom: scaleSize(2),
+    marginBottom: scaleSize(4), // Increased from 2
   },
   orderStatus: {
-    height: scaleSize(15),
+    height: scaleSize(24), // Increased from 15
   },
   deliveredStatus: {
     backgroundColor: "#E8F5E8",
@@ -384,7 +357,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF3E0",
   },
   orderStatusText: {
-    fontSize: scaleSize(6),
+    fontSize: scaleSize(11), // Increased from 6
+    fontWeight: '500',
   },
   noDataContainer: {
     alignItems: "center",
