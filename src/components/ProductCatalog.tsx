@@ -13,6 +13,7 @@ import {
   ScrollView,
 } from "react-native";
 import { Text, Card, Chip, Searchbar, Button, ActivityIndicator, Snackbar } from "react-native-paper";
+import { useNavigation } from "@react-navigation/native";
 import { Product, getProducts, getProductsByCategory } from "../firebase/firestore";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
@@ -235,8 +236,10 @@ const SizeSelectionModal: React.FC<{
   const [selectedVariant, setSelectedVariant] = useState<any>(null);
   const [quantity, setQuantity] = useState<number>(1);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const { getTotalItems } = useCart();
+  const navigation = useNavigation<any>();
 
-  // Group variants by color and sort sizes
+  // Group variants by color
   const colorGroups = useMemo((): ColorGroup[] => {
     if (!product?.sizes) return [];
     
@@ -286,9 +289,17 @@ const SizeSelectionModal: React.FC<{
     onDismiss();
   };
 
+  const handleViewCart = () => {
+    handleClose();
+    // Navigate to the OrderCart tab within SalesmanTabs
+    navigation.navigate('SalesmanTabs', { screen: 'OrderCart' });
+  };
+
   const handleSnackbarDismiss = () => {
     setSnackbarVisible(false);
   };
+
+  const cartItemCount = getTotalItems?.() ?? 0;
 
   if (!product) return null;
 
@@ -428,10 +439,11 @@ const SizeSelectionModal: React.FC<{
           <View style={styles.modalActions}>
             <Button
               mode="outlined"
-              onPress={handleClose}
-              style={styles.cancelButton}
+              onPress={handleViewCart}
+              style={styles.viewCartButton}
+              disabled={cartItemCount === 0}
             >
-              Close
+              {cartItemCount > 0 ? `View Cart (${cartItemCount})` : 'View Cart'}
             </Button>
             <Button
               mode="contained"
@@ -1109,7 +1121,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#E0E0E0",
     gap: scaleSize(12),
   },
-  cancelButton: {
+  viewCartButton: {
     flex: 1,
     borderColor: "#4ECDC4",
   },
