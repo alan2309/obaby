@@ -1,6 +1,6 @@
 // src/screens/salesman/MyOrdersScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Share, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Share, Platform, TouchableOpacity } from 'react-native';
 import { Text, Card, Chip, ActivityIndicator, Searchbar, Button, IconButton, Menu, Snackbar, DataTable } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
 import { Order, getOrdersBySalesman, getOrderDeliverySummary } from '../../firebase/firestore';
@@ -159,6 +159,11 @@ const MyOrdersScreen: React.FC = () => {
         .total{font-weight:700;font-size:16px;margin-top:8px;border-top:2px solid #E6C76E;padding-top:8px}
         .footer{margin-top:24px;text-align:center;color:#666;font-size:12px;padding-top:12px;border-top:1px solid #ddd}
         .product-id{font-family:monospace;font-size:12px;color:#888}
+        @media print {
+          @page { margin: 0.5in; }
+          body { margin: 0; -webkit-print-color-adjust: exact; }
+          .header { border-bottom: 2px solid #E6C76E; }
+        }
       </style></head><body>
       <div class="header"><div class="title">ORDER FORM</div><div class="subtitle">Sales Order Confirmation</div></div>
       <div class="order-info">
@@ -218,6 +223,37 @@ const MyOrdersScreen: React.FC = () => {
       <div class="footer"><p>This invoice was generated automatically by the Sales App</p><p>Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p></div>
       </body></html>`;
 
+      // Different approach for web vs native
+      if (Platform.OS === 'web') {
+        // For web: Use browser's print functionality with better styling
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(htmlContent);
+          printWindow.document.close();
+          
+          // Wait for content to load then trigger print
+          printWindow.onload = () => {
+            printWindow.focus();
+            // Add delay to ensure content is rendered
+            setTimeout(() => {
+              printWindow.print();
+              setSnackbarMsg('Print dialog opened - Select "Save as PDF" for digital copy');
+              setGeneratingPdf(null);
+            }, 500);
+          };
+        } else {
+          // Fallback: Use current window print
+          const originalContent = document.body.innerHTML;
+          document.body.innerHTML = htmlContent;
+          window.print();
+          document.body.innerHTML = originalContent;
+          setSnackbarMsg('Printing...');
+          setGeneratingPdf(null);
+        }
+        return;
+      }
+
+      // Original native implementation for iOS and Android
       const { uri } = await Print.printToFileAsync({ html: htmlContent });
       if (!uri) throw new Error('Failed to create PDF');
 
@@ -227,6 +263,7 @@ const MyOrdersScreen: React.FC = () => {
         return;
       }
 
+      // Android implementation
       const SAF = (FileSystem as any).StorageAccessFramework;
       if (SAF) {
         try {
@@ -248,6 +285,7 @@ const MyOrdersScreen: React.FC = () => {
         }
       }
 
+      // Fallback for Android
       try {
         const docDir = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || '';
         const dest = `${docDir}Order_${order.id ?? 'order'}_Invoice_${Date.now()}.pdf`;
@@ -264,7 +302,10 @@ const MyOrdersScreen: React.FC = () => {
       console.error('Error generating PDF:', error);
       setSnackbarMsg('Failed to generate PDF');
     } finally {
-      setGeneratingPdf(null);
+      if (Platform.OS !== 'web') {
+        setGeneratingPdf(null);
+      }
+      // For web, generatingPdf is set to null in the printWindow.onload callback
     }
   };
 
@@ -407,7 +448,7 @@ const MyOrdersScreen: React.FC = () => {
                         style={styles.actionButton}
                         compact
                       >
-                        PDF
+                        {Platform.OS === 'web' ? 'Print' : 'PDF'}
                       </Button>
                       <Button
                         mode="outlined"
@@ -422,7 +463,7 @@ const MyOrdersScreen: React.FC = () => {
                     {/* Products Table */}
                     <DataTable style={styles.productsTable}>
                       <DataTable.Header>
-                        <DataTable.Title style={styles.tableHeader}>SKU</DataTable.Title>
+                        <DataTable.Title style={styles.tableHeader}>Product</DataTable.Title>
                         <DataTable.Title style={styles.tableHeader}>Size</DataTable.Title>
                         <DataTable.Title numeric style={styles.tableHeader}>Quantity</DataTable.Title>
                         <DataTable.Title numeric style={styles.tableHeader}>Dispatched</DataTable.Title>
@@ -438,6 +479,9 @@ const MyOrdersScreen: React.FC = () => {
                             <DataTable.Cell style={styles.tableCell}>
                               <Text variant="bodySmall" style={styles.productName} numberOfLines={1}>
                                 {item.productName}
+                              </Text>
+                              <Text variant="bodySmall" style={styles.skuText}>
+                                {(item.productId ?? '').toString().substring(0, 8)}
                               </Text>
                             </DataTable.Cell>
                             <DataTable.Cell style={styles.tableCell}>
@@ -534,9 +578,6 @@ const MyOrdersScreen: React.FC = () => {
     </View>
   );
 };
-
-// Add TouchableOpacity import at the top
-import { TouchableOpacity } from 'react-native';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
