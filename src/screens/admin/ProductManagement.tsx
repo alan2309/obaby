@@ -130,7 +130,7 @@ const ProductManagement: React.FC = () => {
 
   // Add a single variant
   const addVariant = () => {
-    setVariants([...variants, { size: '', color: 'Default', stock: 0 }]);
+    setVariants([...variants, { size: '', color: 'Default', stock: 1 }]);
   };
 
   const updateVariant = (
@@ -145,6 +145,28 @@ const ProductManagement: React.FC = () => {
 
   const removeVariant = (index: number) => {
     setVariants(variants.filter((_, i) => i !== index));
+  };
+
+  // Stock management functions
+  const increaseStock = (index: number) => {
+    const updatedVariants = [...variants];
+    updatedVariants[index].stock += 1;
+    setVariants(updatedVariants);
+  };
+
+  const decreaseStock = (index: number) => {
+    const updatedVariants = [...variants];
+    if (updatedVariants[index].stock > 0) {
+      updatedVariants[index].stock -= 1;
+      setVariants(updatedVariants);
+    }
+  };
+
+  const handleStockChange = (index: number, value: string) => {
+    const numericValue = parseInt(value) || 0;
+    if (numericValue >= 0) {
+      updateVariant(index, 'stock', numericValue);
+    }
   };
 
   const clearAllVariants = () => {
@@ -663,14 +685,33 @@ const ProductManagement: React.FC = () => {
                       mode="outlined"
                       placeholder="e.g., S, M, L, XL..."
                     />
-                    <TextInput
-                      label="Stock"
-                      value={variant.stock.toString()}
-                      onChangeText={(value) => updateVariant(index, 'stock', parseInt(value) || 0)}
-                      style={styles.variantInput}
-                      mode="outlined"
-                      keyboardType="numeric"
-                    />
+                    <View style={styles.stockContainer}>
+                      <Text variant="bodyMedium" style={styles.stockLabel}>
+                        Stock
+                      </Text>
+                      <View style={styles.stockControls}>
+                        <IconButton 
+                          icon="minus" 
+                          size={20} 
+                          onPress={() => decreaseStock(index)}
+                          disabled={variant.stock <= 0}
+                          iconColor={variant.stock <= 0 ? '#ccc' : '#D32F2F'}
+                        />
+                        <TextInput
+                          value={variant.stock.toString()}
+                          onChangeText={(value) => handleStockChange(index, value)}
+                          style={styles.stockInput}
+                          mode="outlined"
+                          keyboardType="numeric"
+                        />
+                        <IconButton 
+                          icon="plus" 
+                          size={20} 
+                          onPress={() => increaseStock(index)}
+                          iconColor="#4CAF50"
+                        />
+                      </View>
+                    </View>
                     <IconButton icon="delete" onPress={() => removeVariant(index)} iconColor="red" size={20} />
                   </View>
                 </Card.Content>
@@ -958,10 +999,28 @@ const styles = StyleSheet.create({
   variantRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: scaleSize(8),
   },
   variantInput: {
     flex: 1,
-    marginHorizontal: scaleSize(4),
+  },
+  // Stock management styles
+  stockContainer: {
+    flex: 1,
+  },
+  stockLabel: {
+    marginBottom: scaleSize(4),
+    color: '#3B3B3B',
+    fontSize: 12,
+  },
+  stockControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleSize(4),
+  },
+  stockInput: {
+    flex: 1,
+    textAlign: 'center',
   },
   variantButtons: {
     flexDirection: 'row',
