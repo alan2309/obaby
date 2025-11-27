@@ -162,7 +162,7 @@ const ProductManagement: React.FC = () => {
     const standardVariants = standardSizes.map((size) => ({
       size,
       color: 'Default',
-      stock: 0,
+      stock: 1,
     }));
     setVariants(standardVariants);
     Alert.alert('Success', 'Reset to standard sizes');
