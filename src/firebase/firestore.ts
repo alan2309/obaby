@@ -67,7 +67,9 @@ export interface OrderItem {
 export interface Order {
   id?: string;
   customerId: string;
+  customerName: string; // Add this
   salesmanId: string;
+  salesmanName: string; // Add this
   items: OrderItem[];
   totalAmount: number;
   totalCost: number;
@@ -609,9 +611,31 @@ export const createOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updat
       };
     }
 
-    // All validations passed - create the order
+    // Fetch customer and salesman names
+    const [customerData, salesmanData] = await Promise.all([
+      getUser(order.customerId),
+      getUser(order.salesmanId)
+    ]);
+
+    if (!customerData) {
+      return {
+        success: false,
+        message: 'Customer not found',
+      };
+    }
+
+    if (!salesmanData) {
+      return {
+        success: false,
+        message: 'Salesman not found',
+      };
+    }
+
+    // All validations passed - create the order with names
     const docRef = await addDoc(collection(firestore, COLLECTIONS.ORDERS), {
       ...order,
+      customerName: customerData.name || 'Unknown Customer',
+      salesmanName: salesmanData.name || 'Unknown Salesman',
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
@@ -786,9 +810,19 @@ export const getOrdersBySalesman = async (salesmanId: string): Promise<Order[]> 
       const data = doc.data();
       return {
         id: doc.id,
-        ...data,
+        customerId: data.customerId,
+        customerName: data.customerName || 'Unknown Customer', // Ensure name is included
+        salesmanId: data.salesmanId,
+        salesmanName: data.salesmanName || 'Unknown Salesman', // Ensure name is included
+        items: data.items || [],
+        totalAmount: data.totalAmount || 0,
+        totalCost: data.totalCost || 0,
+        totalProfit: data.totalProfit || 0,
+        status: data.status || 'Pending',
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date(),
+        deliveredAmount: data.deliveredAmount || 0,
+        deliveredProfit: data.deliveredProfit || 0,
       } as Order;
     });
 

@@ -1,6 +1,6 @@
 // src/screens/admin/OrderManagement.tsx
 import React, { useState, useEffect, useMemo } from "react";
-import { View, StyleSheet, ScrollView, RefreshControl, Dimensions } from "react-native";
+import { View, StyleSheet, ScrollView, RefreshControl, Dimensions, Platform } from "react-native";
 import {
   Text,
   Card,
@@ -22,6 +22,9 @@ import {
   getOrderDeliverySummary,
 } from "../../firebase/firestore";
 import { scaleSize, platformStyle } from "../../utils/constants";
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -33,6 +36,7 @@ const OrderManagement: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [deliveryLoading, setDeliveryLoading] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
 
   // Simple filter states
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -91,6 +95,13 @@ const OrderManagement: React.FC = () => {
     const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
     if (isNaN(d.getTime())) return "-";
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const formatFullDate = (date: Date | string | number | undefined | null) => {
+    if (!date) return "-";
+    const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
+    if (isNaN(d.getTime())) return "-";
+    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
   const getStatusColor = (status: string) => {
@@ -197,6 +208,176 @@ const OrderManagement: React.FC = () => {
     return orders.reduce((total, order) => {
       return total + order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
     }, 0);
+  };
+
+  // PDF Generation Function
+  const generateOrderPDF = async (order: Order) => {
+    try {
+      if (!order) return;
+      setGeneratingPdf(order.id ?? null);
+
+      const items = Array.isArray(order.items) ? order.items : [];
+      const created = order.createdAt ? new Date(order.createdAt) : new Date();
+      const deliveryProgress = getOrderDeliverySummary(order);
+
+      // Use customerName and salesmanName from order data
+      const customerName = order.customerName || getCustomerName(order.customerId) || 'Unknown Customer';
+      const salesmanName = order.salesmanName || getSalesmanName(order.salesmanId) || 'Unknown Salesman';
+
+      const htmlContent = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>
+        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;margin:20px;color:#333}
+        .header{text-align:center;margin-bottom:20px;border-bottom:2px solid #E6C76E;padding-bottom:12px}
+        .title{font-size:24px;font-weight:700;color:#3B3B3B;margin-bottom:4px}
+        .subtitle{font-size:14px;color:#666}
+        .order-info{display:flex;justify-content:space-between;margin:20px 0;padding:16px;background:#FAF9F6;border-radius:8px;border-left:4px solid #E6C76E}
+        .info-section{flex:1;padding-right:12px}
+        .info-label{font-weight:700;color:#3B3B3B;margin-bottom:6px}
+        .info-value{color:#666;margin-bottom:4px}
+        .status-badge{display:inline-block;padding:6px 12px;background:${getStatusColor(order.status)}22;color:${getStatusColor(order.status)};border-radius:20px;font-weight:700;border:1px solid ${getStatusColor(order.status)}}
+        .delivery-progress{margin:12px 0;padding:12px;background:#E3F2FD;border-radius:6px;border-left:4px solid #2196F3}
+        .progress-bar{height:8px;background:#E0E0E0;border-radius:4px;margin:8px 0;overflow:hidden}
+        .progress-fill{height:100%;background:#4CAF50;border-radius:4px}
+        .progress-text{font-size:12px;color:#666;text-align:center}
+        .table{width:100%;border-collapse:collapse;margin:16px 0;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+        .table th{background:#E6C76E;color:#3B3B3B;padding:10px;text-align:left;border:1px solid #ddd;font-weight:700}
+        .table td{padding:10px;border:1px solid #ddd;vertical-align:top}
+        .delivered-badge{display:inline-block;padding:2px 6px;background:#4CAF50;color:white;border-radius:10px;font-size:10px;margin-left:4px}
+        .summary{margin-top:16px;padding:16px;background:#FAF9F6;border-radius:8px;border:1px solid #E6C76E}
+        .summary-row{display:flex;justify-content:space-between;margin:6px 0}
+        .total{font-weight:700;font-size:16px;margin-top:8px;border-top:2px solid #E6C76E;padding-top:8px}
+        .footer{margin-top:24px;text-align:center;color:#666;font-size:12px;padding-top:12px;border-top:1px solid #ddd}
+        .product-id{font-family:monospace;font-size:12px;color:#888}
+        @media print {
+          @page { margin: 0.5in; }
+          body { margin: 0; -webkit-print-color-adjust: exact; }
+          .header { border-bottom: 2px solid #E6C76E; }
+        }
+      </style></head><body>
+      <div class="header"><div class="title">ORDER FORM</div><div class="subtitle">Sales Order Confirmation</div></div>
+      <div class="order-info">
+        <div class="info-section">
+          <div class="info-label">Order Details</div>
+          <div class="info-value">Order #: ${order.id ?? 'N/A'}</div>
+          <div class="info-value">Date: ${formatFullDate(created)}</div>
+          <div class="info-value">Status: <span class="status-badge">${order.status}</span></div>
+        </div>
+        <div class="info-section">
+          <div class="info-label">Sales Information</div>
+          <div class="info-value">Salesman: ${salesmanName}</div>
+          <div class="info-value">Customer: ${customerName}</div>
+        </div>
+      </div>
+      <table class="table"><thead><tr><th>Product</th><th>Size & Color</th><th>Quantity</th><th>Delivered</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>
+      ${items.map(i => {
+        const deliveredQty = i.deliveredQuantity || 0;
+        const remainingQty = i.quantity - deliveredQty;
+        return `<tr>
+          <td><strong>${i.productName ?? 'N/A'}</strong><div class="product-id">${(i.productId ?? 'N/A').toString().substring(0,8)}</div></td>
+          <td>${i.size ?? '-'} • ${i.color ?? '-'}</td>
+          <td>${i.quantity ?? 0}</td>
+          <td>
+            ${deliveredQty > 0 ? `
+              <strong style="color: #4CAF50">${deliveredQty}</strong>
+              ${remainingQty > 0 ? `<span style="color: #FF9800">(${remainingQty} pending)</span>` : '<span class="delivered-badge">✓</span>'}
+            ` : '<span style="color: #757575">0</span>'}
+          </td>
+          <td>₹${(Number(i.finalPrice) || 0).toFixed(2)}</td>
+          <td><strong>₹${(((Number(i.finalPrice) || 0) * (i.quantity || 0))).toFixed(2)}</strong></td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>
+      <div class="summary">
+        <div class="summary-row"><span>Total Items:</span><span>${deliveryProgress.totalItems}</span></div>
+        ${deliveryProgress.isPartiallyDelivered ? `
+        <div class="summary-row"><span>Delivered Items:</span><span style="color: #4CAF50">${deliveryProgress.deliveredItems}</span></div>
+        <div class="summary-row"><span>Remaining Items:</span><span style="color: #FF9800">${deliveryProgress.remainingItems}</span></div>
+        ` : ''}
+        <div class="summary-row total"><span>Total Amount:</span><span>₹${(Number(order.totalAmount) || 0).toFixed(2)}</span></div>
+        ${order.deliveredAmount ? `<div class="summary-row"><span>Amount Delivered:</span><span style="color: #4CAF50">₹${(Number(order.deliveredAmount) || 0).toFixed(2)}</span></div>` : ''}
+      </div>
+      <div class="footer"><p>This invoice was generated automatically by the Adwyzors Business Manager</p><p>Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p></div>
+      </body></html>`;
+
+      // Different approach for web vs native
+      if (Platform.OS === 'web') {
+        // For web: Use browser's print functionality with better styling
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(htmlContent);
+          printWindow.document.close();
+          
+          // Wait for content to load then trigger print
+          printWindow.onload = () => {
+            printWindow.focus();
+            // Add delay to ensure content is rendered
+            setTimeout(() => {
+              printWindow.print();
+              setGeneratingPdf(null);
+            }, 500);
+          };
+        } else {
+          // Fallback: Use current window print
+          const originalContent = document.body.innerHTML;
+          document.body.innerHTML = htmlContent;
+          window.print();
+          document.body.innerHTML = originalContent;
+          setGeneratingPdf(null);
+        }
+        return;
+      }
+
+      // Original native implementation for iOS and Android
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      if (!uri) throw new Error('Failed to create PDF');
+
+      if (Platform.OS === 'ios') {
+        await Sharing.shareAsync(uri);
+        setGeneratingPdf(null);
+        return;
+      }
+
+      // Android implementation
+      const SAF = (FileSystem as any).StorageAccessFramework;
+      if (SAF) {
+        try {
+          const permissions = await SAF.requestDirectoryPermissionsAsync();
+          if (permissions?.granted) {
+            const directoryUri = permissions.directoryUri;
+            const fileName = `Order_${order.id ?? 'order'}_Invoice_${Date.now()}.pdf`;
+            const createdFileUri = await SAF.createFileAsync(directoryUri, fileName, 'application/pdf');
+            await FileSystem.copyAsync({ from: uri, to: createdFileUri });
+            setGeneratingPdf(null);
+            return;
+          } else {
+            await Sharing.shareAsync(uri);
+            setGeneratingPdf(null);
+            return;
+          }
+        } catch (safErr) {
+          console.warn('SAF flow failed, falling back to share:', safErr);
+        }
+      }
+
+      // Fallback for Android
+      try {
+        const docDir = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || '';
+        const dest = `${docDir}Order_${order.id ?? 'order'}_Invoice_${Date.now()}.pdf`;
+        await FileSystem.copyAsync({ from: uri, to: dest });
+        await Sharing.shareAsync(dest);
+      } catch (fallbackErr) {
+        console.error('Final fallback failed, sharing generated URI instead', fallbackErr);
+        await Sharing.shareAsync(uri);
+      }
+
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF');
+    } finally {
+      if (Platform.OS !== 'web') {
+        setGeneratingPdf(null);
+      }
+      // For web, generatingPdf is set to null in the printWindow.onload callback
+    }
   };
 
   // -------------------
@@ -471,6 +652,20 @@ const OrderManagement: React.FC = () => {
               <Text variant="bodySmall" style={styles.orderIdFull}>
                 #{selectedOrder.id}
               </Text>
+
+              {/* PDF Generation Button */}
+              <View style={styles.pdfButtonContainer}>
+                <Button
+                  mode="outlined"
+                  onPress={() => generateOrderPDF(selectedOrder)}
+                  loading={generatingPdf === selectedOrder.id}
+                  disabled={generatingPdf === selectedOrder.id}
+                  style={styles.pdfButton}
+                  icon="file-pdf-box"
+                >
+                  {Platform.OS === 'web' ? 'Print PDF' : 'Generate PDF'}
+                </Button>
+              </View>
 
               <View style={styles.modalSection}>
                 <Text variant="titleSmall">Customer & Salesman</Text>
@@ -752,6 +947,16 @@ const styles = StyleSheet.create({
   modalTitle: { textAlign: "center", marginBottom: 8, color: "#3B3B3B" },
   orderIdFull: { textAlign: "center", color: "#A08B73", marginBottom: 16 },
   modalSection: { marginBottom: 16 },
+
+  /* PDF Button */
+  pdfButtonContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pdfButton: {
+    borderColor: '#F7CAC9',
+    minWidth: 200,
+  },
 
   /* products table */
   productsTable: {

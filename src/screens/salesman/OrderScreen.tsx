@@ -200,64 +200,66 @@ const OrderScreen: React.FC = () => {
     setSnackbarVisible(true);
   };
 
-  const createOrderHandler = async () => {
-    try {
-      setSubmitting(true);
+ const createOrderHandler = async () => {
+  try {
+    setSubmitting(true);
 
-      const orderItems = cartItems.map(item => ({
-        productId: item.product.id!,
-        productName: item.product.title,
-        size: item.sizeVariant.size,
-        color: item.sizeVariant.color,
-        quantity: item.quantity,
-        costPrice: item.product.costPrice || 0,
-        sellingPrice: item.product.sellingPrice || 0,
-        finalPrice: item.product.sellingPrice || 0,
-        discountGiven: 0,
-      }));
+    const orderItems = cartItems.map(item => ({
+      productId: item.product.id!,
+      productName: item.product.title,
+      size: item.sizeVariant.size,
+      color: item.sizeVariant.color,
+      quantity: item.quantity,
+      costPrice: item.product.costPrice || 0,
+      sellingPrice: item.product.sellingPrice || 0,
+      finalPrice: item.product.sellingPrice || 0,
+      discountGiven: 0,
+    }));
 
-      const orderData = {
-        customerId: selectedCustomer!.id!,
-        salesmanId: user!.uid,
-        items: orderItems,
-        totalAmount: getTotalAmount(),
-        totalCost: getTotalCost(),
-        totalProfit: getTotalProfit(),
-        status: 'Pending' as const,
-      };
+    const orderData = {
+      customerId: selectedCustomer!.id!,
+      customerName: selectedCustomer!.name, // Add customer name
+      salesmanId: user!.uid,
+      salesmanName: user!.name || 'Salesman', // Add salesman name
+      items: orderItems,
+      totalAmount: getTotalAmount(),
+      totalCost: getTotalCost(),
+      totalProfit: getTotalProfit(),
+      status: 'Pending' as const,
+    };
 
-      const result = await createOrder(orderData);
-      
-      if (result.success) {
-        setSnackbarMessage(`Order created successfully! Order ID: ${result.orderId}`);
-        setSnackbarVisible(true);
-        
-        clearCart();
-        setSelectedCustomer(null);
-      } else {
-        if (result.outOfStockItems && result.outOfStockItems.length > 0) {
-          showOutOfStockAlert(result.outOfStockItems.map(item => ({
-            ...item,
-            requestedQuantity: orderItems.find(oi => 
-              oi.productName === item.productName && 
-              oi.size === item.size && 
-              oi.color === item.color
-            )?.quantity || 0
-          })));
-        } else {
-          setSnackbarMessage(`Failed to create order: ${result.message}`);
-          setSnackbarVisible(true);
-        }
-      }
-      
-    } catch (error: any) {
-      console.error('Error creating order:', error);
-      setSnackbarMessage(`Failed to create order: ${error.message}`);
+    const result = await createOrder(orderData);
+    
+    if (result.success) {
+      setSnackbarMessage(`Order created successfully! Order ID: ${result.orderId}`);
       setSnackbarVisible(true);
-    } finally {
-      setSubmitting(false);
+      
+      clearCart();
+      setSelectedCustomer(null);
+    } else {
+      if (result.outOfStockItems && result.outOfStockItems.length > 0) {
+        showOutOfStockAlert(result.outOfStockItems.map(item => ({
+          ...item,
+          requestedQuantity: orderItems.find(oi => 
+            oi.productName === item.productName && 
+            oi.size === item.size && 
+            oi.color === item.color
+          )?.quantity || 0
+        })));
+      } else {
+        setSnackbarMessage(`Failed to create order: ${result.message}`);
+        setSnackbarVisible(true);
+      }
     }
-  };
+    
+  } catch (error: any) {
+    console.error('Error creating order:', error);
+    setSnackbarMessage(`Failed to create order: ${error.message}`);
+    setSnackbarVisible(true);
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   // Reset search when modal opens/closes
   const handleModalOpen = () => {
