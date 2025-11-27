@@ -115,8 +115,8 @@ const ProductManagement: React.FC = () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
+        allowsEditing: false, // Changed to false to prevent cropping
+        aspect: undefined, // Removed fixed aspect ratio
         quality: 0.8,
       });
 
@@ -478,7 +478,11 @@ const ProductManagement: React.FC = () => {
                 <Card key={product.id} style={styles.productCard}>
                   <Card.Content style={styles.productCardContent}>
                     {product.images && product.images.length > 0 && (
-                      <Image source={{ uri: product.images[0] }} style={styles.productImage} />
+                      <Image 
+                        source={{ uri: product.images[0] }} 
+                        style={styles.productImage} 
+                        resizeMode="contain"
+                      />
                     )}
                     <Text variant="bodyMedium" numberOfLines={2} style={styles.productTitle}>
                       {product.title}
@@ -604,7 +608,12 @@ const ProductManagement: React.FC = () => {
             {images.length > 0 && (
               <ScrollView horizontal style={styles.imageScroll}>
                 {images.map((uri, index) => (
-                  <Image key={index} source={{ uri }} style={styles.image} />
+                  <Image 
+                    key={index} 
+                    source={{ uri }} 
+                    style={styles.image} 
+                    resizeMode="contain"
+                  />
                 ))}
               </ScrollView>
             )}
@@ -810,8 +819,8 @@ const styles = StyleSheet.create({
     padding: scaleSize(8),
   },
   productImage: {
-    width: 80,
-    height: 80,
+    width: 100,
+    height: 100,
     borderRadius: scaleSize(8),
     marginBottom: scaleSize(8),
   },
@@ -918,8 +927,8 @@ const styles = StyleSheet.create({
     marginBottom: scaleSize(16),
   },
   image: {
-    width: 80,
-    height: 80,
+    width: 120,
+    height: 120,
     borderRadius: scaleSize(8),
     marginRight: scaleSize(8),
   },

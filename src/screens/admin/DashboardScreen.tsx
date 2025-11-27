@@ -123,7 +123,7 @@ const DashboardScreen: React.FC = () => {
       0
     );
     const pendingOrders = orders.filter(
-      (o) => o?.status === "Pending"
+      (o) => o?.status === "Pending"|| o?.status === "Partially Delivered"
     ).length;
 
     return { totalOrders, totalSales, totalItemsSold, pendingOrders };
@@ -165,7 +165,7 @@ const DashboardScreen: React.FC = () => {
 
   // Top products based on delivered orders only
   const topProducts = useMemo(
-    () => getTopProducts(filteredOrders, 5),
+    () => getTopProducts(filteredOrders, 10),
     [filteredOrders]
   );
 
@@ -468,7 +468,7 @@ const DashboardScreen: React.FC = () => {
             <Clipped radius={scaleSize(8)}>
               <Card.Content>
                 <Text variant="titleLarge" style={[styles.tableTitle, { fontSize: responsiveFont(16) }]}>
-                  Top 5 Selling Products ({timeRange}) - Delivered
+                  Top 10 Selling Products ({timeRange}) - Delivered
                 </Text>
                 
                 {/* Fixed DataTable without horizontal scroll */}

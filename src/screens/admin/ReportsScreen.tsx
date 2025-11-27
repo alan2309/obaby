@@ -180,7 +180,7 @@ const ReportsScreen: React.FC = () => {
 • Total Orders: ${report.totalFilteredOrders}
 • Completion Rate: ${report.summary.completionRate}%
 
-🏆 TOP PRODUCTS:
+🏆 TOP 10 PRODUCTS:
 ${report.topProducts.map((product, index) => 
   `${index + 1}. ${product.name} - ${product.sales} units - ₹${product.profit.toFixed(2)} revenue`
 ).join('\n')}
@@ -344,7 +344,7 @@ ${report.topCustomers.map((customer, index) =>
       <Card style={styles.reportCard}>
         <Card.Content>
           <Text variant="titleLarge" style={styles.reportTitle}>
-            🏆 Top Products ({dateRange})
+            🏆 Top 10 Products ({dateRange})
           </Text>
           <DataTable>
             <DataTable.Header>

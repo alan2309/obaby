@@ -58,10 +58,6 @@ const CategoryProductsScreen: React.FC = () => {
     if (!isSelectionMode) {
       setIsSelectionMode(true);
       setSelectedProducts([product]);
-      setSnackbarMessage(
-        "Selection mode activated. Tap products to select/deselect."
-      );
-      setSnackbarVisible(true);
     }
   };
 
@@ -119,8 +115,6 @@ const CategoryProductsScreen: React.FC = () => {
   const clearSelection = () => {
     setSelectedProducts([]);
     setIsSelectionMode(false);
-    setSnackbarMessage("Selection cleared");
-    setSnackbarVisible(true);
   };
 
   const exitSelectionMode = () => {

@@ -150,7 +150,7 @@ const DashboardSalesman: React.FC = () => {
       totalSales,
       totalProductsSold,
       completionRate: Math.round(completionRate),
-      pendingOrders: filteredAllOrders.filter(order => order.status === "Pending").length
+      pendingOrders: filteredAllOrders.filter(order => order.status === "Pending"|| order.status === "Partially Delivered").length
     };
   }, [filteredDeliveredOrders, filteredAllOrders]);
 
@@ -285,10 +285,7 @@ const DashboardSalesman: React.FC = () => {
             </Chip>
             <Text style={styles.metricLabel}>
               Total Orders -{" "}
-              <Text style={styles.metricValue}>{performance.totalOrders}</Text>
-            </Text>
-            <Text style={styles.metricSubtext}>
-              {performance.pendingOrders} pending in {timeRange}
+              <Text style={styles.metricValue}>{performance.deliveredOrders+performance.pendingOrders}</Text>
             </Text>
           </Card.Content>
         </Card>

@@ -1,7 +1,7 @@
 import * as FileSystem from "expo-file-system";
 
 const CLOUDINARY_CONFIG = {
-  cloudName: "dqq6i5g0i",
+  cloudName: "dr1wnqewh",
   uploadPreset: "products_upload",
 };
 
