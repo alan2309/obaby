@@ -109,7 +109,7 @@ const OrderManagement: React.FC = () => {
       case "Pending":
         return "#FFA000";
       case "Partially Delivered":
-        return "#FF9800";
+        return "#2196F3";
       case "Delivered":
         return "#4CAF50";
       default:

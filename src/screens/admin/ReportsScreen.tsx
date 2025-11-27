@@ -69,6 +69,52 @@ const ReportsScreen: React.FC = () => {
     return totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0;
   };
 
+  // Calculate top customers
+  const calculateTopCustomers = useMemo(() => {
+    const customerStats: { [key: string]: {
+      customer: any;
+      totalPieces: number;
+      totalOrders: number;
+      totalSpent: number;
+      salesman: any;
+    } } = {};
+
+    // Process delivered orders only for customer analysis
+    const deliveredOrders = filteredOrders.filter(order => order.status === 'Delivered');
+
+    deliveredOrders.forEach(order => {
+      const customerId = order.customerId;
+      
+      if (!customerStats[customerId]) {
+        // Find customer and associated salesman
+        const customer = users.find(user => user.id === customerId || user.uid === customerId);
+        const salesman = customer?.salesmanId ? 
+          users.find(user => (user.id === customer.salesmanId || user.uid === customer.salesmanId)) : null;
+
+        customerStats[customerId] = {
+          customer,
+          totalPieces: 0,
+          totalOrders: 0,
+          totalSpent: 0,
+          salesman
+        };
+      }
+
+      // Calculate pieces from this order
+      const orderPieces = order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      
+      customerStats[customerId].totalPieces += orderPieces;
+      customerStats[customerId].totalOrders += 1;
+      customerStats[customerId].totalSpent += order.totalAmount || 0;
+    });
+
+    // Convert to array and sort by total pieces (descending)
+    return Object.values(customerStats)
+      .filter(stat => stat.customer) // Only include found customers
+      .sort((a, b) => b.totalPieces - a.totalPieces)
+      .slice(0, 10); // Top 10 customers
+  }, [filteredOrders, users]);
+
   // Generate report data with filtered orders
   const report = useMemo(() => {
     const deliveredOrders = filteredOrders.filter(order => order.status === 'Delivered');
@@ -112,9 +158,10 @@ const ReportsScreen: React.FC = () => {
       },
       topProducts,
       salesmanPerformance: salesmanPerformance.slice(0, 5),
+      topCustomers: calculateTopCustomers,
       totalFilteredOrders: filteredOrders.length
     };
-  }, [filteredOrders, users, dateRange]);
+  }, [filteredOrders, users, dateRange, calculateTopCustomers]);
 
   const shareReport = async () => {
     const periodText = dateRange === 'week' ? 'Last 7 Days' : 
@@ -138,9 +185,14 @@ ${report.topProducts.map((product, index) =>
   `${index + 1}. ${product.name} - ${product.sales} units - ₹${product.profit.toFixed(2)} revenue`
 ).join('\n')}
 
-👥 TOP SALESMEN:
+👥 TOP 5 SALESMEN:
 ${report.salesmanPerformance.map((salesman, index) => 
   `${index + 1}. ${salesman.name} - ${salesman.productsSold} products - ${salesman.totalOrders} orders`
+).join('\n')}
+
+👥 TOP 10 CUSTOMERS:
+${report.topCustomers.map((customer, index) => 
+  `${index + 1}. ${customer.customer.name} - ${customer.totalPieces} pieces - ₹${customer.totalSpent.toFixed(2)} spent`
 ).join('\n')}
     `.trim();
 
@@ -327,7 +379,7 @@ ${report.salesmanPerformance.map((salesman, index) =>
       <Card style={styles.reportCard}>
         <Card.Content>
           <Text variant="titleLarge" style={styles.reportTitle}>
-            👥 Top Salesmen ({dateRange})
+            👥 Top 5 Salesmen ({dateRange}ly)
           </Text>
           <DataTable>
             <DataTable.Header>
@@ -340,7 +392,7 @@ ${report.salesmanPerformance.map((salesman, index) =>
               <DataTable.Row key={salesman.id}>
                 <DataTable.Cell style={styles.salesmanColumn}>
                   <View>
-                    <Text style={styles.salesmanName}>
+                    <Text style={styles.salesmanName1}>
                       {index + 1}. {salesman.name}
                     </Text>
                     <Text style={styles.salesmanCompletion}>
@@ -359,6 +411,55 @@ ${report.salesmanPerformance.map((salesman, index) =>
           </DataTable>
           {report.salesmanPerformance.length === 0 && (
             <Text style={styles.emptyText}>No salesman data for this period</Text>
+          )}
+        </Card.Content>
+      </Card>
+
+      {/* Top Customers */}
+      <Card style={styles.reportCard}>
+        <Card.Content>
+          <Text variant="titleLarge" style={styles.reportTitle}>
+            👥 Top 10 Customers ({dateRange}ly)
+          </Text>
+          <DataTable>
+            <DataTable.Header>
+              <DataTable.Title style={styles.customerColumn}>Customer</DataTable.Title>
+              <DataTable.Title style={styles.locationColumn}>Location</DataTable.Title>
+              <DataTable.Title numeric style={styles.piecesColumn}>Pieces</DataTable.Title>
+              <DataTable.Title numeric style={styles.ordersColumn}>Orders</DataTable.Title>
+            </DataTable.Header>
+
+            {report.topCustomers.map((customerData, index) => (
+              <DataTable.Row key={customerData.customer.id || customerData.customer.uid}>
+                <DataTable.Cell style={styles.customerColumn}>
+                  <View>
+                    <Text style={styles.customerName}>
+                      {index + 1}. {customerData.customer.name}
+                    </Text>
+                    <Text style={styles.customerPhone}>
+                      {customerData.customer.phone || 'No phone'}
+                    </Text>
+                    <Text style={styles.salesmanName}>
+                      Salesman: {customerData.salesman?.name || 'Not assigned'}
+                    </Text>
+                  </View>
+                </DataTable.Cell>
+                <DataTable.Cell style={styles.locationColumn}>
+                  <Text style={styles.customerCity}>
+                    {customerData.customer.city || 'No city'}
+                  </Text>
+                </DataTable.Cell>
+                <DataTable.Cell numeric style={styles.piecesColumn}>
+                  <Text style={styles.customerPieces}>{customerData.totalPieces}</Text>
+                </DataTable.Cell>
+                <DataTable.Cell numeric style={styles.ordersColumn}>
+                  <Text style={styles.customerOrders}>{customerData.totalOrders}</Text>
+                </DataTable.Cell>
+              </DataTable.Row>
+            ))}
+          </DataTable>
+          {report.topCustomers.length === 0 && (
+            <Text style={styles.emptyText}>No customer data for this period</Text>
           )}
         </Card.Content>
       </Card>
@@ -528,6 +629,9 @@ const styles = StyleSheet.create({
   salesmanColumn: { flex: 2 },
   productsColumn: { flex: 1 },
   ordersColumn: { flex: 1 },
+  customerColumn: { flex: 2 },
+  locationColumn: { flex: 1.5 },
+  piecesColumn: { flex: 1 },
   productName: {
     fontSize: scaleSize(12),
     color: '#3B3B3B',
@@ -543,7 +647,12 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
   },
   salesmanName: {
-    fontSize: scaleSize(12),
+    fontSize: scaleSize(9),
+    color: '#3B3B3B',
+    fontWeight: '600',
+  },
+  salesmanName1: {
+    fontSize: scaleSize(14),
     color: '#3B3B3B',
     fontWeight: '600',
   },
@@ -557,6 +666,29 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
   },
   salesmanOrders: {
+    fontSize: scaleSize(12),
+    fontWeight: '600',
+    color: '#F7CAC9',
+  },
+  customerName: {
+    fontSize: scaleSize(14),
+    color: '#3B3B3B',
+    fontWeight: '600',
+  },
+  customerPhone: {
+    fontSize: scaleSize(10),
+    color: '#A08B73',
+  },
+  customerCity: {
+    fontSize: scaleSize(11),
+    color: '#3B3B3B',
+  },
+  customerPieces: {
+    fontSize: scaleSize(12),
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  customerOrders: {
     fontSize: scaleSize(12),
     fontWeight: '600',
     color: '#F7CAC9',

@@ -137,14 +137,10 @@ const MyOrdersScreen: React.FC = () => {
     switch (status) {
       case ORDER_STATUS.PENDING:
         return "#FFA000";
-      case ORDER_STATUS.PACKED:
-        return "#2196F3";
-      case ORDER_STATUS.SHIPPED:
-        return "#673AB7";
       case ORDER_STATUS.DELIVERED:
         return "#4CAF50";
       case "Partially Delivered":
-        return "#FF9800";
+        return "#2196F3";
       default:
         return "#757575";
     }
