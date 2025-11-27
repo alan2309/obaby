@@ -468,7 +468,7 @@ const DashboardScreen: React.FC = () => {
             <Clipped radius={scaleSize(8)}>
               <Card.Content>
                 <Text variant="titleLarge" style={[styles.tableTitle, { fontSize: responsiveFont(16) }]}>
-                  Top Selling Products ({timeRange})
+                  Top 5 Selling Products ({timeRange})
                 </Text>
                 
                 {/* Fixed DataTable without horizontal scroll */}

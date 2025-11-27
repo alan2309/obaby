@@ -8,6 +8,7 @@ import {
   Share,
   Platform,
   TouchableOpacity,
+  Dimensions,
 } from "react-native";
 import {
   Text,
@@ -33,10 +34,17 @@ import {
   ORDER_STATUS,
   theme,
   scaleFont,
+  screenSize,
+  isSmallDevice,
 } from "../../utils/constants";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
+
+const { width: screenWidth } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 375; // iPhone SE, small Android devices
+const isMediumScreen = screenWidth >= 375 && screenWidth < 414; // Standard iPhones
+const isLargeScreen = screenWidth >= 414; // Plus size phones, iPads
 
 const MyOrdersScreen: React.FC = () => {
   const { user } = useAuth();
@@ -473,11 +481,10 @@ const MyOrdersScreen: React.FC = () => {
                       </Text>
                       <Chip
                         mode="outlined"
-                        textStyle={{
-                          color: getStatusColor(order.status),
-                          fontSize: scaleFont(10),
-                          fontWeight: "bold",
-                        }}
+                        textStyle={[
+                          styles.statusChipText,
+                          { color: getStatusColor(order.status) }
+                        ]}
                         style={[
                           styles.statusChip,
                           {
@@ -750,20 +757,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: scaleSize(4),
+    flexWrap: isSmallDevice ? 'wrap' : 'nowrap',
   },
   orderId: {
     fontWeight: "600",
     marginRight: scaleSize(8),
     color: theme.colors.text,
+    fontSize: isSmallDevice ? scaleFont(13) : scaleFont(14),
   },
   statusChip: {
-    height: scaleSize(24),
-    paddingHorizontal: scaleSize(6),
+    height: isSmallDevice ? scaleSize(32) : scaleSize(26),
+    paddingHorizontal: isSmallDevice ? scaleSize(10) : scaleSize(12),
+    minWidth: isSmallDevice ? scaleSize(80) : scaleSize(90),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusChipText: {
+    fontSize: isSmallDevice ? scaleFont(11) : scaleFont(12),
+    fontWeight: "bold",
+    textAlign: 'center',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   orderDate: {
     color: theme.colors.placeholder,
     marginBottom: scaleSize(6),
-    fontSize: scaleFont(12),
+    fontSize: isSmallDevice ? scaleFont(11) : scaleFont(12),
   },
   orderSummary: {
     flexDirection: "row",
@@ -774,15 +793,16 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: theme.colors.accent,
     marginRight: scaleSize(8),
+    fontSize: isSmallDevice ? scaleFont(13) : scaleFont(14),
   },
   itemCount: {
     color: theme.colors.placeholder,
     marginRight: scaleSize(8),
-    fontSize: scaleFont(12),
+    fontSize: isSmallDevice ? scaleFont(11) : scaleFont(12),
   },
   deliveredCount: {
     color: "#4CAF50",
-    fontSize: scaleFont(12),
+    fontSize: isSmallDevice ? scaleFont(11) : scaleFont(12),
     fontWeight: "500",
   },
   expandIcon: {
@@ -804,7 +824,7 @@ const styles = StyleSheet.create({
     gap: scaleSize(8),
   },
   actionButton: {
-    minWidth: scaleSize(60),
+    minWidth: isSmallDevice ? scaleSize(60) : scaleSize(70),
   },
 
   // Products Table Styles

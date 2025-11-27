@@ -33,7 +33,7 @@ export const calculateMonthlyProfit = (orders: Order[]) => {
     }));
 };
 
-export const getTopProducts = (orders: Order[], limit: number = 5) => {
+export const getTopProducts = (orders: Order[], limit: number = 10) => {
   const productSales: { [key: string]: { name: string; sales: number; profit: number } } = {};
   
   orders.forEach(order => {

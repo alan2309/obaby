@@ -37,8 +37,7 @@ const MyOrders: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending': return '#FFA000';
-      case 'Packed': return '#2196F3';
-      case 'Shipped': return '#673AB7';
+      case 'Partially Delivered': return '#2196F3';
       case 'Delivered': return '#4CAF50';
       default: return '#757575';
     }

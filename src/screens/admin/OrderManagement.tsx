@@ -365,7 +365,7 @@ const OrderManagement: React.FC = () => {
         await FileSystem.copyAsync({ from: uri, to: dest });
         await Sharing.shareAsync(dest);
       } catch (fallbackErr) {
-        console.error('Final fallback failed, sharing generated URI instead', fallbackErr);
+        // console.error('Final fallback failed, sharing generated URI instead', fallbackErr);
         await Sharing.shareAsync(uri);
       }
 

@@ -74,7 +74,7 @@ export interface Order {
   totalAmount: number;
   totalCost: number;
   totalProfit: number;
-  status: 'Pending' | 'Packed' | 'Shipped' | 'Delivered' | 'Partially Delivered';
+  status: 'Pending' | 'Delivered' | 'Partially Delivered';
   createdAt: Date;
   updatedAt: Date;
   deliveredAmount?: number;

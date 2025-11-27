@@ -1,3 +1,4 @@
+// src/screens/admin/SalesmanManagement.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import { View, StyleSheet, ScrollView, RefreshControl, Alert } from "react-native";
 import {
@@ -27,7 +28,7 @@ interface SalesmanWithStats extends UserData {
     totalOrders: number;
     deliveredOrders: number;
     totalSales: number;
-    totalProductsSold: number; // Replaced totalProfit
+    totalProductsSold: number;
     averageOrderValue: number;
     completionRate: number;
   };
@@ -55,7 +56,7 @@ const SalesmanManagement: React.FC = () => {
     name: "",
     email: "",
     phone: "",
-    city: "", // Added city field
+    city: "",
     password: "",
     maxDiscountPercent: "10",
   });
@@ -123,7 +124,7 @@ const SalesmanManagement: React.FC = () => {
         (sum, order) => sum + (order?.totalAmount || 0),
         0
       );
-      const totalProductsSold = calculateTotalProductsSold(deliveredOrders); // Calculate products sold
+      const totalProductsSold = calculateTotalProductsSold(deliveredOrders);
 
       const completionRate =
         totalOrders > 0 ? (deliveredOrders.length / totalOrders) * 100 : 0;
@@ -151,18 +152,18 @@ const SalesmanManagement: React.FC = () => {
           totalOrders,
           deliveredOrders: deliveredOrders.length,
           totalSales,
-          totalProductsSold, // Replaced totalProfit
+          totalProductsSold,
           averageOrderValue,
           completionRate: Math.round(completionRate),
         },
         calculatedDiscountGiven,
         lastActive: lastOrder ? new Date(lastOrder.createdAt) : null,
         allOrders: salesmanOrders,
-        isTopPerformer: false, // Will be set below
+        isTopPerformer: false,
       };
     });
 
-    // Mark top performers (top 3 by products sold instead of sales)
+    // Mark top performers (top 3 by products sold)
     const sortedByProductsSold = [...salesmenStats].sort(
       (a, b) => b.performance.totalProductsSold - a.performance.totalProductsSold
     );
@@ -185,7 +186,7 @@ const SalesmanManagement: React.FC = () => {
         salesman.name.toLowerCase().includes(query) ||
         salesman.email.toLowerCase().includes(query) ||
         salesman.uid.toLowerCase().includes(query) ||
-        salesman.city.toLowerCase().includes(query) // Added city to search
+        salesman.city.toLowerCase().includes(query)
     );
   }, [salesmenWithStats, searchQuery]);
 
@@ -233,7 +234,7 @@ const SalesmanManagement: React.FC = () => {
         newSalesman.password,
         newSalesman.name,
         newSalesman.phone,
-        newSalesman.city, // Added city
+        newSalesman.city,
       );
 
       Alert.alert("Success", "Salesman account created successfully!");
@@ -242,11 +243,11 @@ const SalesmanManagement: React.FC = () => {
         name: "",
         email: "",
         phone: "",
-        city: "", // Reset city
+        city: "",
         password: "",
         maxDiscountPercent: "10",
       });
-      loadData(); // Refresh the list
+      loadData();
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to create salesman account");
     } finally {
@@ -254,12 +255,12 @@ const SalesmanManagement: React.FC = () => {
     }
   };
 
-  // Performance color based on products sold (adjusted scale)
+  // Performance color based on products sold
   const getPerformanceColor = (productsSold: number) => {
-    if (productsSold >= 1000) return "#4CAF50"; // Excellent
-    if (productsSold >= 500) return "#FFA000";  // Good
-    if (productsSold >= 100) return "#FF9800";  // Average
-    return "#F44336"; // Needs improvement
+    if (productsSold >= 1000) return "#4CAF50";
+    if (productsSold >= 500) return "#FFA000";
+    if (productsSold >= 100) return "#FF9800";
+    return "#F44336";
   };
 
   const formatDate = (date: Date | null) => {
@@ -709,9 +710,6 @@ const SalesmanManagement: React.FC = () => {
                                     styles.deliveredChip,
                                   order.status === "Pending" &&
                                     styles.pendingChip,
-                                  order.status === "Shipped" &&
-                                    styles.shippedChip,
-                                  order.status === "Packed" && styles.packedChip,
                                 ]}
                               >
                                 {order.status}
@@ -746,7 +744,6 @@ const SalesmanManagement: React.FC = () => {
   );
 };
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -756,7 +753,7 @@ const styles = StyleSheet.create({
     padding: platformStyle.padding,
     paddingBottom: 20,
   },
-   productsCount: {
+  productsCount: {
     fontSize: scaleSize(12),
     color: "#4CAF50",
     fontWeight: "600",
@@ -1120,12 +1117,6 @@ const styles = StyleSheet.create({
   },
   pendingChip: {
     backgroundColor: "#FFF3E0",
-  },
-  shippedChip: {
-    backgroundColor: "#E3F2FD",
-  },
-  packedChip: {
-    backgroundColor: "#F3E5F5",
   },
   attendanceSummary: {
     flexDirection: "row",

@@ -112,7 +112,6 @@ export const getMaxContainerWidth = () => {
   });
 };
 
-// Rest of your constants remain the same...
 export const isExtraLargeScreen = screenSize === 'xlarge';
 export const isLargeScreen = screenSize === 'large' || isExtraLargeScreen;
 export const isMediumScreen = screenSize === 'medium' || isLargeScreen;
@@ -205,7 +204,6 @@ export const isSmallDevice = screenSize === 'xsmall' || screenSize === 'small';
 // Get current screen config
 export const currentScreenConfig = screenConfig[screenSize];
 
-
 // Collection constants
 export const COLLECTIONS = {
   USERS: 'users',
@@ -218,8 +216,6 @@ export const COLLECTIONS = {
 
 export const ORDER_STATUS = {
   PENDING: 'Pending',
-  PACKED: 'Packed',
-  SHIPPED: 'Shipped',
   DELIVERED: 'Delivered',
 } as const;
 
@@ -228,6 +224,7 @@ export const USER_ROLES = {
   SALESMAN: 'salesman',
   CUSTOMER: 'customer',
 } as const;
+
 export const getCardWidth = (containerPadding: number = 32, gap: number = 16) => {
   const columns = getGridColumns();
   const availableWidth = SCREEN_WIDTH - containerPadding - (gap * (columns - 1));

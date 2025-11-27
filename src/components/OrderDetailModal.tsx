@@ -1,3 +1,4 @@
+// src/components/OrderDetailModal.tsx
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Modal, Portal, Text, Card, Chip, DataTable, Button } from 'react-native-paper';
@@ -34,8 +35,6 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending': return '#FFA000';
-      case 'Packed': return '#2196F3';
-      case 'Shipped': return '#673AB7';
       case 'Delivered': return '#4CAF50';
       default: return '#757575';
     }
@@ -167,33 +166,13 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                   Update Status
                 </Text>
                 <View style={styles.statusActions}>
-                  {order.status === 'Pending' && (
-                    <Button
-                      mode="contained"
-                      onPress={() => onStatusUpdate(order.id!, 'Packed')}
-                      style={styles.statusButton}
-                    >
-                      Mark as Packed
-                    </Button>
-                  )}
-                  {order.status === 'Packed' && (
-                    <Button
-                      mode="contained"
-                      onPress={() => onStatusUpdate(order.id!, 'Shipped')}
-                      style={styles.statusButton}
-                    >
-                      Mark as Shipped
-                    </Button>
-                  )}
-                  {order.status === 'Shipped' && (
-                    <Button
-                      mode="contained"
-                      onPress={() => onStatusUpdate(order.id!, 'Delivered')}
-                      style={styles.statusButton}
-                    >
-                      Mark as Delivered
-                    </Button>
-                  )}
+                  <Button
+                    mode="contained"
+                    onPress={() => onStatusUpdate(order.id!, 'Delivered')}
+                    style={styles.statusButton}
+                  >
+                    Mark as Delivered
+                  </Button>
                 </View>
               </Card.Content>
             </Card>
