@@ -301,7 +301,7 @@ const DashboardScreen: React.FC = () => {
           {
             key: "sales-team",
             icon: "👥",
-            title: "Sales Team",
+            title: "Distrubutors",
             subtitle: `${salesmen.length} active`,
             onPress: () => navigation.navigate("SalesmanManagement"),
           },
@@ -391,7 +391,7 @@ const DashboardScreen: React.FC = () => {
           {
             key: "salesmen",
             value: salesmen.length,
-            label: "Active Salesmen",
+            label: "Active Distributors",
             chip: topSalesman ? `Top: ${topSalesman.name?.split(" ")[0] || "N/A"}` : undefined,
           },
           {
@@ -542,6 +542,7 @@ const DashboardScreen: React.FC = () => {
                           styles.statusChip,
                           order?.status === "Delivered" && styles.deliveredChip,
                           order?.status === "Pending" && styles.pendingChip,
+                          order?.status === "Partially Delivered"&& styles.partiallydeliveredChip,
                         ]}
                         textStyle={[styles.statusText, { fontSize: responsiveFont(10) }]}
                       >
@@ -702,8 +703,10 @@ const styles = StyleSheet.create({
     marginBottom: scaleSize(6),
   },
   metricChip: {
-    height: scaleSize(28),
+    height: scaleSize(30),
     backgroundColor: "#E3F2FD",
+    justifyContent: "center",
+    alignContent : "center",
   },
 
   // Chart
@@ -815,6 +818,9 @@ const styles = StyleSheet.create({
   },
   deliveredChip: {
     backgroundColor: "#E8F5E8",
+  },
+  partiallydeliveredChip:{
+    backgroundColor: "#5db1f7ff",
   },
   pendingChip: {
     backgroundColor: "#FFF3E0",

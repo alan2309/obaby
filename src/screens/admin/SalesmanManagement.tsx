@@ -330,7 +330,7 @@ const SalesmanManagement: React.FC = () => {
             style={styles.addButton}
             icon="account-plus"
           >
-            Add Salesman
+            Add Distributor
           </Button>
         </View>
 
@@ -339,7 +339,7 @@ const SalesmanManagement: React.FC = () => {
           <Card style={styles.summaryCard}>
             <Card.Content style={styles.summaryContent}>
               <Text style={styles.summaryValue}>{salesmen.length}</Text>
-              <Text style={styles.summaryLabel}>Total Salesmen</Text>
+              <Text style={styles.summaryLabel}>Total Distributors</Text>
             </Card.Content>
           </Card>
 
@@ -383,7 +383,7 @@ const SalesmanManagement: React.FC = () => {
         <Card style={styles.listCard}>
           <Card.Content>
             <Text variant="titleLarge" style={styles.listTitle}>
-              Sales Team Performance
+              Distributors Performance
             </Text>
             <DataTable>
               <DataTable.Header>
@@ -502,7 +502,7 @@ const SalesmanManagement: React.FC = () => {
       {/* Add Salesman Dialog */}
       <Portal>
         <Dialog visible={addDialogVisible} onDismiss={() => setAddDialogVisible(false)}>
-          <Dialog.Title>Add New Salesman</Dialog.Title>
+          <Dialog.Title>Add New Distributor</Dialog.Title>
           <Dialog.Content>
             <TextInput
               label="Full Name *"
