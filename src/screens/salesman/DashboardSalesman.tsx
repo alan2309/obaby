@@ -18,7 +18,7 @@ import {
   calculateSalesmanPerformance,
   calculateMonthlySales,
 } from "../../utils/calculateProfit";
-import { scaleSize, platformStyle } from "../../utils/constants";
+import { scaleSize, platformStyle, isSmallDevice, scaleFont } from "../../utils/constants";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -92,6 +92,19 @@ const DashboardSalesman: React.FC = () => {
     style: {
       borderRadius: 16,
     },
+  };
+
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case "Pending":
+        return "#FFA000";
+      case "Delivered":
+        return "#4CAF50";
+      case "Partially Delivered":
+        return "#2196F3";
+      default:
+        return "#757575";
+    }
   };
 
   if (loading) {
@@ -211,12 +224,18 @@ const DashboardSalesman: React.FC = () => {
                 </Text>
                 <Chip
                   mode="outlined"
+                  textStyle={[
+                    styles.orderStatusText,
+                    { color: getStatusColor(order.status) }
+                  ]}
                   style={[
                     styles.orderStatus,
+                    {
+                      backgroundColor: `${getStatusColor(order.status)}22`,
+                    },
                     order.status === "Delivered" && styles.deliveredStatus,
                     order.status === "Pending" && styles.pendingStatus,
                   ]}
-                  textStyle={styles.orderStatusText}
                 >
                   {order.status || 'Unknown'}
                 </Chip>
@@ -288,7 +307,7 @@ const styles = StyleSheet.create({
     marginBottom: scaleSize(6),
   },
   metricChip: {
-    height: scaleSize(24),
+    height: scaleSize(33),
     backgroundColor: "#E3F2FD",
     justifyContent: "center",
     alignContent: "center",
@@ -319,7 +338,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: scaleSize(12), // Increased from 8
+    paddingVertical: scaleSize(12),
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
@@ -327,38 +346,43 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   orderId: {
-    fontSize: scaleSize(14), // Increased from 8
+    fontSize: scaleSize(14),
     fontWeight: "600",
     color: "#3B3B3B",
-    marginBottom: scaleSize(4), // Increased from 2
+    marginBottom: scaleSize(4),
   },
   orderDate: {
-    fontSize: scaleSize(12), // Increased from 6
+    fontSize: scaleSize(12),
     color: "#A08B73",
   },
   orderDetails: {
     alignItems: "flex-end",
   },
   orderAmount: {
-    fontSize: scaleSize(14), // Increased from 8
+    fontSize: scaleSize(14),
     fontWeight: "600",
     color: "#E6C76E",
-    marginBottom: scaleSize(4), // Increased from 2
+    marginBottom: scaleSize(4),
   },
   orderStatus: {
-    height: scaleSize(24), // Increased from 15
+    height: isSmallDevice ? scaleSize(34) : scaleSize(32),
+    paddingHorizontal: isSmallDevice ? scaleSize(8) : scaleSize(12),
+    minWidth: isSmallDevice ? scaleSize(70) : scaleSize(85),
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   deliveredStatus: {
     backgroundColor: "#E8F5E8",
-    justifyContent: "center",
-    alignItems: "center",
   },
   pendingStatus: {
     backgroundColor: "#FFF3E0",
   },
   orderStatusText: {
-    fontSize: scaleSize(11), // Increased from 6
-    fontWeight: '500',
+    fontSize: isSmallDevice ? scaleFont(9.5) : scaleFont(11),
+    fontWeight: "bold",
+    textAlign: 'center',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   noDataContainer: {
     alignItems: "center",
