@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { View, StyleSheet, ScrollView, Dimensions } from "react-native";
 import {
   Text,
@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Button,
 } from "react-native-paper";
-import { BarChart } from "react-native-chart-kit";
+import { LineChart } from "react-native-chart-kit";
 import { useAuth } from "../../context/AuthContext";
 import {
   Order,
@@ -16,9 +16,11 @@ import {
 } from "../../firebase/firestore";
 import {
   calculateSalesmanPerformance,
-  calculateMonthlySales,
+  calculateMonthlyItemsSold,
+  calculateWeeklyItemsSold,
+  calculateYearlyItemsSold,
 } from "../../utils/calculateProfit";
-import { scaleSize, platformStyle, isSmallDevice, scaleFont } from "../../utils/constants";
+import { scaleSize, platformStyle, isSmallDevice, scaleFont, theme } from "../../utils/constants";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -27,6 +29,7 @@ const DashboardSalesman: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<"week" | "month" | "year">("month");
 
   useEffect(() => {
     if (user) {
@@ -64,34 +67,136 @@ const DashboardSalesman: React.FC = () => {
     }
   };
 
-  // Safe performance calculation
-  const performance = calculateSalesmanPerformance(orders, user?.uid || "");
+  // Calculate total products sold for delivered orders only
+  const calculateTotalProductsSold = (orders: Order[]): number => {
+    return orders.reduce((total, order) => {
+      return total + order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    }, 0);
+  };
 
-  // Safe monthly sales calculation
-  const monthlySales = calculateMonthlySales(orders);
-  const chartLabels = Object.keys(monthlySales).slice(-6);
-  const chartData =
-    chartLabels.length > 0
-      ? {
-          labels: chartLabels,
-          datasets: [
-            {
-              data: chartLabels.map((month) => Math.round(monthlySales[month])),
-            },
-          ],
-        }
-      : null;
+  // Filter only delivered orders for the current salesman
+  const deliveredOrders = useMemo(() => 
+    orders.filter(order => order.status === "Delivered"),
+    [orders]
+  );
+
+  // Filter delivered orders based on time range
+  const filteredDeliveredOrders = useMemo(() => {
+    const now = new Date();
+    let startDate: Date;
+
+    switch (timeRange) {
+      case "week":
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case "month":
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case "year":
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    return deliveredOrders.filter((order) => {
+      const orderDate = new Date(order.createdAt);
+      return orderDate >= startDate && orderDate <= now;
+    });
+  }, [deliveredOrders, timeRange]);
+
+  // Filter all orders (including pending) based on time range for completion rate calculation
+  const filteredAllOrders = useMemo(() => {
+    const now = new Date();
+    let startDate: Date;
+
+    switch (timeRange) {
+      case "week":
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case "month":
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case "year":
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    return orders.filter((order) => {
+      const orderDate = new Date(order.createdAt);
+      return orderDate >= startDate && orderDate <= now;
+    });
+  }, [orders, timeRange]);
+
+  // Calculate performance metrics using time-filtered delivered orders
+  const performance = useMemo(() => {
+    const totalOrders = filteredDeliveredOrders.length;
+    const totalSales = filteredDeliveredOrders.reduce(
+      (sum, order) => sum + (order?.totalAmount || 0),
+      0
+    );
+    const totalProductsSold = calculateTotalProductsSold(filteredDeliveredOrders);
+    
+    // Calculate completion rate based on time-filtered orders
+    const totalOrdersInTimeRange = filteredAllOrders.length;
+    const completionRate = totalOrdersInTimeRange > 0 ? 
+      (filteredDeliveredOrders.length / totalOrdersInTimeRange) * 100 : 0;
+
+    return {
+      totalOrders,
+      deliveredOrders: filteredDeliveredOrders.length,
+      totalSales,
+      totalProductsSold,
+      completionRate: Math.round(completionRate),
+      pendingOrders: filteredAllOrders.filter(order => order.status === "Pending").length
+    };
+  }, [filteredDeliveredOrders, filteredAllOrders]);
+
+  // Calculate chart data based on time range (items sold from delivered orders only)
+  const chartData = useMemo(() => {
+    let itemsData: { period: string; items: number }[] = [];
+
+    switch (timeRange) {
+      case "week":
+        itemsData = calculateWeeklyItemsSold(filteredDeliveredOrders);
+        break;
+      case "month":
+        itemsData = calculateMonthlyItemsSold(filteredDeliveredOrders).map(
+          ({ month, items }) => ({
+            period: month,
+            items,
+          })
+        );
+        break;
+      case "year":
+        itemsData = calculateYearlyItemsSold(filteredDeliveredOrders);
+        break;
+      default:
+        itemsData = calculateMonthlyItemsSold(filteredDeliveredOrders).map(
+          ({ month, items }) => ({
+            period: month,
+            items,
+          })
+        );
+    }
+
+    return {
+      labels: itemsData.map((item) => item.period),
+      data: itemsData.map((item) => item.items),
+    };
+  }, [filteredDeliveredOrders, timeRange]);
 
   const chartConfig = {
-    backgroundColor: "#FAF9F6",
-    backgroundGradientFrom: "#FAF9F6",
-    backgroundGradientTo: "#FAF9F6",
+    backgroundColor: theme.colors.surface,
+    backgroundGradientFrom: theme.colors.surface,
+    backgroundGradientTo: theme.colors.surface,
     decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(230, 199, 110, ${opacity})`,
+    color: (opacity = 1) => `rgba(247, 202, 201, ${opacity})`,
     labelColor: (opacity = 1) => `rgba(59, 59, 59, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
+    style: { borderRadius: 16 },
+    propsForDots: { r: "4", strokeWidth: "2", stroke: "#F7CAC9" },
   };
 
   const getStatusColor = (status?: string) => {
@@ -138,6 +243,38 @@ const DashboardSalesman: React.FC = () => {
         Welcome back, {user?.name}!
       </Text>
 
+      {/* Time Range Selector */}
+      <View style={styles.timeRangeContainer}>
+        {(["week", "month", "year"] as const).map((range) => (
+          <View
+            key={range}
+            style={[
+              styles.timeRangeWrapper,
+              timeRange === range && styles.timeRangeWrapperActive,
+            ]}
+          >
+            <Chip
+              selected={timeRange === range}
+              onPress={() => setTimeRange(range)}
+              style={[
+                styles.timeRangeChip,
+                timeRange === range && styles.timeRangeChipActive,
+              ]}
+              mode="outlined"
+              textStyle={{ fontSize: scaleFont(12) }}
+            >
+              {range.charAt(0).toUpperCase() + range.slice(1)}
+            </Chip>
+          </View>
+        ))}
+      </View>
+
+      {/* Time Range Info */}
+      <Text variant="bodySmall" style={styles.timeRangeInfo}>
+        Showing delivered orders data for{" "}
+        {timeRange === "week" ? "the last 7 days" : timeRange === "month" ? "this month" : "this year"}
+      </Text>
+
       {/* Performance Metrics */}
       <View style={styles.metricsGrid}>
         <Card style={styles.metricCard}>
@@ -150,6 +287,9 @@ const DashboardSalesman: React.FC = () => {
               Total Orders -{" "}
               <Text style={styles.metricValue}>{performance.totalOrders}</Text>
             </Text>
+            <Text style={styles.metricSubtext}>
+              {performance.pendingOrders} pending in {timeRange}
+            </Text>
           </Card.Content>
         </Card>
 
@@ -159,15 +299,21 @@ const DashboardSalesman: React.FC = () => {
               ₹{performance.totalSales.toFixed(0)}
             </Text>
             <Text style={styles.metricLabel}>Total Sales</Text>
+            <Text style={styles.metricSubtext}>
+              From {performance.deliveredOrders} orders
+            </Text>
           </Card.Content>
         </Card>
 
         <Card style={styles.metricCard}>
           <Card.Content style={styles.metricContent}>
             <Text style={styles.metricValue}>
-              ₹{performance.totalProfit.toFixed(0)}
+              {performance.totalProductsSold.toLocaleString()}
             </Text>
-            <Text style={styles.metricLabel}>Total Profit</Text>
+            <Text style={styles.metricLabel}>Items Sold</Text>
+            <Text style={styles.metricSubtext}>
+              In {timeRange}
+            </Text>
           </Card.Content>
         </Card>
 
@@ -177,80 +323,100 @@ const DashboardSalesman: React.FC = () => {
               {performance.completionRate}%
             </Text>
             <Text style={styles.metricLabel}>Completion Rate</Text>
+            <Text style={styles.metricSubtext}>
+              {performance.deliveredOrders}/{filteredAllOrders.length} orders
+            </Text>
           </Card.Content>
         </Card>
       </View>
 
-      {/* Sales Chart - Only show if we have data */}
-      {chartData && chartData.labels.length > 0 && (
+      {/* Items Sold Chart - Only show if we have data */}
+      {chartData.data.length > 0 && chartData.data.some((val) => val > 0) && (
         <Card style={styles.chartCard}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.chartTitle}>
-              Monthly Sales Performance
-            </Text>
-            <BarChart
-              data={chartData}
-              width={SCREEN_WIDTH - 60}
-              height={220}
-              chartConfig={chartConfig}
-              style={styles.chart}
-              showValuesOnTopOfBars
-              yAxisLabel="₹"
-              yAxisSuffix=""
-            />
-          </Card.Content>
+          <View style={styles.clipped}>
+            <Card.Content>
+              <Text variant="titleLarge" style={styles.chartTitle}>
+                {timeRange.charAt(0).toUpperCase() + timeRange.slice(1)}ly Items Sold (Delivered)
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator>
+                <LineChart
+                  data={{
+                    labels: chartData.labels,
+                    datasets: [{ data: chartData.data }],
+                  }}
+                  verticalLabelRotation={-25}
+                  width={Math.max(SCREEN_WIDTH - 60, chartData.labels.length * 60)}
+                  height={SCREEN_WIDTH < 768 ? 220 : 260}
+                  chartConfig={chartConfig}
+                  bezier
+                  style={styles.chart}
+                  formatYLabel={(y) => {
+                    const n = Number(y);
+                    if (isNaN(n)) return y;
+                    if (Math.abs(n) >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+                    if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(1)}k`;
+                    return `${n}`;
+                  }}
+                  withDots={SCREEN_WIDTH >= 768}
+                  withShadow={false}
+                />
+              </ScrollView>
+            </Card.Content>
+          </View>
         </Card>
       )}
 
       {/* Recent Orders */}
       <Card style={styles.ordersCard}>
-        <Card.Content>
-          <Text variant="titleLarge" style={styles.ordersTitle}>
-            Recent Orders
-          </Text>
-          {orders.slice(0, 5).map((order) => (
-            <View key={order.id} style={styles.orderItem}>
-              <View style={styles.orderInfo}>
-                <Text style={styles.orderId}>
-                  Order #{order.id?.substring(0, 8)}
-                </Text>
-                <Text style={styles.orderDate}>
-                  {order.createdAt?.toLocaleDateString?.() || 'N/A'}
+        <View style={styles.clipped}>
+          <Card.Content>
+            <Text variant="titleLarge" style={styles.ordersTitle}>
+              Recent Orders
+            </Text>
+            {orders.slice(0, 5).map((order) => (
+              <View key={order.id} style={styles.orderItem}>
+                <View style={styles.orderInfo}>
+                  <Text style={styles.orderId}>
+                    Order #{order.id?.substring(0, 8)}
+                  </Text>
+                  <Text style={styles.orderDate}>
+                    {order.createdAt?.toLocaleDateString?.() || 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.orderDetails}>
+                  <Text style={styles.orderAmount}>
+                    ₹{(order.totalAmount || 0).toFixed(2)}
+                  </Text>
+                  <Chip
+                    mode="outlined"
+                    textStyle={[
+                      styles.orderStatusText,
+                      { color: getStatusColor(order.status) }
+                    ]}
+                    style={[
+                      styles.orderStatus,
+                      {
+                        backgroundColor: `${getStatusColor(order.status)}22`,
+                      },
+                      order.status === "Delivered" && styles.deliveredStatus,
+                      order.status === "Pending" && styles.pendingStatus,
+                    ]}
+                  >
+                    {order.status || 'Unknown'}
+                  </Chip>
+                </View>
+              </View>
+            ))}
+            {orders.length === 0 && (
+              <View style={styles.noDataContainer}>
+                <Text style={styles.noOrdersText}>No orders yet</Text>
+                <Text style={styles.noOrdersSubtext}>
+                  Start creating orders to see your performance analytics!
                 </Text>
               </View>
-              <View style={styles.orderDetails}>
-                <Text style={styles.orderAmount}>
-                  ₹{(order.totalAmount || 0).toFixed(2)}
-                </Text>
-                <Chip
-                  mode="outlined"
-                  textStyle={[
-                    styles.orderStatusText,
-                    { color: getStatusColor(order.status) }
-                  ]}
-                  style={[
-                    styles.orderStatus,
-                    {
-                      backgroundColor: `${getStatusColor(order.status)}22`,
-                    },
-                    order.status === "Delivered" && styles.deliveredStatus,
-                    order.status === "Pending" && styles.pendingStatus,
-                  ]}
-                >
-                  {order.status || 'Unknown'}
-                </Chip>
-              </View>
-            </View>
-          ))}
-          {orders.length === 0 && (
-            <View style={styles.noDataContainer}>
-              <Text style={styles.noOrdersText}>No orders yet</Text>
-              <Text style={styles.noOrdersSubtext}>
-                Start creating orders to see your performance analytics!
-              </Text>
-            </View>
-          )}
-        </Card.Content>
+            )}
+          </Card.Content>
+        </View>
       </Card>
     </ScrollView>
   );
@@ -277,6 +443,35 @@ const styles = StyleSheet.create({
     color: "#A08B73",
     fontSize: scaleSize(15),
   },
+  // Time Range Styles
+  timeRangeContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: scaleSize(12),
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  timeRangeWrapper: {
+    marginHorizontal: scaleSize(4),
+    marginVertical: scaleSize(2),
+  },
+  timeRangeWrapperActive: {},
+  timeRangeChip: {
+    backgroundColor: "#FAF9F6",
+    minHeight: 32,
+  },
+  timeRangeChipActive: {
+    borderColor: "#F7CAC9",
+    borderWidth: 1,
+  },
+  timeRangeInfo: {
+    textAlign: "center",
+    color: "#A08B73",
+    marginBottom: scaleSize(16),
+    fontStyle: "italic",
+    fontSize: scaleSize(12),
+  },
+  // Metrics Grid
   metricsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -304,17 +499,29 @@ const styles = StyleSheet.create({
     fontSize: scaleSize(11),
     color: "#3B3B3B",
     textAlign: "center",
-    marginBottom: scaleSize(6),
+    marginBottom: scaleSize(2),
+  },
+  metricSubtext: {
+    fontSize: scaleSize(9),
+    color: "#A08B73",
+    textAlign: "center",
+    fontStyle: "italic",
   },
   metricChip: {
     height: scaleSize(33),
     backgroundColor: "#E3F2FD",
     justifyContent: "center",
     alignContent: "center",
+    marginBottom: scaleSize(4),
   },
+  // Chart Styles
   chartCard: {
     marginBottom: scaleSize(20),
     backgroundColor: "#FAF9F6",
+  },
+  clipped: {
+    borderRadius: scaleSize(8),
+    overflow: "hidden",
   },
   chartTitle: {
     textAlign: "center",
@@ -325,6 +532,7 @@ const styles = StyleSheet.create({
     marginVertical: scaleSize(8),
     borderRadius: scaleSize(16),
   },
+  // Orders Card
   ordersCard: {
     marginBottom: scaleSize(20),
     backgroundColor: "#FAF9F6",
@@ -399,22 +607,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#A08B73",
     fontSize: scaleSize(12),
-  },
-  actionsCard: {
-    backgroundColor: "#FAF9F6",
-  },
-  actionsTitle: {
-    textAlign: "center",
-    marginBottom: scaleSize(16),
-    color: "#3B3B3B",
-  },
-  actionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    gap: scaleSize(12),
-  },
-  actionButton: {
-    flex: 1,
   },
   loadingContainer: {
     flex: 1,

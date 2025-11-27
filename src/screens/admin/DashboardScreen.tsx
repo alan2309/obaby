@@ -74,7 +74,13 @@ const DashboardScreen: React.FC = () => {
     loadData();
   };
 
-  // Filter orders based on time range
+  // Filter only delivered orders
+  const deliveredOrders = useMemo(() => 
+    orders.filter(order => order.status === "Delivered"),
+    [orders]
+  );
+
+  // Filter delivered orders based on time range
   const filteredOrders = useMemo(() => {
     const now = new Date();
     let startDate: Date;
@@ -93,43 +99,37 @@ const DashboardScreen: React.FC = () => {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
-    return orders.filter((order) => {
+    return deliveredOrders.filter((order) => {
       const orderDate = new Date(order.createdAt);
       return orderDate >= startDate && orderDate <= now;
     });
-  }, [orders, timeRange]);
+  }, [deliveredOrders, timeRange]);
 
-  // Filter only delivered orders for metrics
-  const deliveredOrders = useMemo(
-    () => filteredOrders.filter((o) => o?.status === "Delivered"),
-    [filteredOrders]
-  );
-
-  // Calculate total items sold
+  // Calculate total items sold from delivered orders
   const totalItemsSold = useMemo(() => {
-    return deliveredOrders.reduce((total, order) => {
+    return filteredOrders.reduce((total, order) => {
       return (
         total +
         order.items.reduce((sum, item) => sum + (item.quantity || 0), 0)
       );
     }, 0);
-  }, [deliveredOrders]);
+  }, [filteredOrders]);
 
-  // Calculate metrics based on filtered data
+  // Calculate metrics based on delivered orders data
   const metrics = useMemo(() => {
     const totalOrders = filteredOrders.length;
-    const totalSales = deliveredOrders.reduce(
+    const totalSales = filteredOrders.reduce(
       (sum, order) => sum + (order?.totalAmount || 0),
       0
     );
-    const pendingOrders = filteredOrders.filter(
+    const pendingOrders = orders.filter(
       (o) => o?.status === "Pending"
     ).length;
 
     return { totalOrders, totalSales, totalItemsSold, pendingOrders };
-  }, [filteredOrders, deliveredOrders, totalItemsSold]);
+  }, [filteredOrders, totalItemsSold, orders]);
 
-  // Calculate chart data based on time range (items sold instead of profit)
+  // Calculate chart data based on time range (items sold from delivered orders only)
   const chartData = useMemo(() => {
     let itemsData: { period: string; items: number }[] = [];
 
@@ -163,13 +163,13 @@ const DashboardScreen: React.FC = () => {
     };
   }, [filteredOrders, timeRange]);
 
-  // Top products based on filtered data
+  // Top products based on delivered orders only
   const topProducts = useMemo(
     () => getTopProducts(filteredOrders, 5),
     [filteredOrders]
   );
 
-  // Salesmen metrics based on filtered data
+  // Salesmen metrics based on delivered orders only
   const salesmen = useMemo(
     () =>
       Array.isArray(users) ? users.filter((u) => u?.role === "salesman") : [],
@@ -179,14 +179,14 @@ const DashboardScreen: React.FC = () => {
   const topSalesman = useMemo(
     () =>
       salesmen.reduce((top: any, salesman: any) => {
-        const salesmanSales = deliveredOrders
+        const salesmanSales = filteredOrders
           .filter((order) => order?.salesmanId === salesman.id)
           .reduce((s, order) => s + (order?.totalAmount || 0), 0);
         return !top || salesmanSales > top.sales
           ? { ...salesman, sales: salesmanSales }
           : top;
       }, null as any),
-    [salesmen, deliveredOrders]
+    [salesmen, filteredOrders]
   );
 
   const chartConfig = {
@@ -301,7 +301,7 @@ const DashboardScreen: React.FC = () => {
           {
             key: "sales-team",
             icon: "👥",
-            title: "Distrubutors",
+            title: "Distributors",
             subtitle: `${salesmen.length} active`,
             onPress: () => navigation.navigate("SalesmanManagement"),
           },
@@ -375,7 +375,7 @@ const DashboardScreen: React.FC = () => {
 
       {/* Time Range Info */}
       <Text variant="bodySmall" style={[styles.timeRangeInfo, { fontSize: responsiveFont(12) }]}>
-        Showing data for{" "}
+        Showing delivered orders data for{" "}
         {timeRange === "week" ? "the last 7 days" : timeRange === "month" ? "this month" : "this year"}
       </Text>
 
@@ -385,7 +385,7 @@ const DashboardScreen: React.FC = () => {
           {
             key: "orders",
             value: metrics.totalOrders,
-            label: "Total Orders",
+            label: "Delivered Orders",
             chip: `${metrics.pendingOrders} pending`,
           },
           {
@@ -430,7 +430,7 @@ const DashboardScreen: React.FC = () => {
             <Clipped radius={scaleSize(8)}>
               <Card.Content>
                 <Text variant="titleLarge" style={[styles.chartTitle, { fontSize: responsiveFont(16) }]}>
-                  {timeRange.charAt(0).toUpperCase() + timeRange.slice(1)}ly Items Sold
+                  {timeRange.charAt(0).toUpperCase() + timeRange.slice(1)}ly Items Sold (Delivered)
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator>
                   <LineChart
@@ -468,7 +468,7 @@ const DashboardScreen: React.FC = () => {
             <Clipped radius={scaleSize(8)}>
               <Card.Content>
                 <Text variant="titleLarge" style={[styles.tableTitle, { fontSize: responsiveFont(16) }]}>
-                  Top 5 Selling Products ({timeRange})
+                  Top 5 Selling Products ({timeRange}) - Delivered
                 </Text>
                 
                 {/* Fixed DataTable without horizontal scroll */}
@@ -522,7 +522,7 @@ const DashboardScreen: React.FC = () => {
               <Text variant="titleLarge" style={[styles.activityTitle, { fontSize: responsiveFont(16) }]}>
                 Recent Activity ({timeRange})
               </Text>
-              {(Array.isArray(filteredOrders) ? filteredOrders.slice(0, 5) : []).map((order) => {
+              {(Array.isArray(orders) ? orders.slice(0, 5) : []).map((order) => {
                 const dateString = new Date(order.createdAt).toLocaleDateString();
                 return (
                   <View key={order.id} style={styles.activityItem}>
