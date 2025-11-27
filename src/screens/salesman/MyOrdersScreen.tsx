@@ -375,9 +375,7 @@ const MyOrdersScreen: React.FC = () => {
                     : ""
                 })`
               : "";
-          return `• ${item.productName} (${item.size || "-"}, ${
-            item.color || "-"
-          }) - ${item.quantity} x ₹${(Number(item.finalPrice) || 0).toFixed(
+          return `• ${item.productName} (${item.size || "-"})- ${item.quantity} x ₹${(Number(item.finalPrice) || 0).toFixed(
             2
           )} = ₹${(
             (Number(item.finalPrice) || 0) * (item.quantity || 0)

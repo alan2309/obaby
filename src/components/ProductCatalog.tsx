@@ -394,7 +394,7 @@ const SizeSelectionModal: React.FC<{
               <>
                 <View style={styles.selectedVariantInfo}>
                   <Text style={styles.selectedVariantText}>
-                    Selected: {selectedVariant.color} - {selectedVariant.size}
+                    Selected: {selectedVariant.size}
                   </Text>
                   <Text style={styles.selectedStockInfo}>
                     Available: {selectedVariant.stock} units

@@ -93,7 +93,7 @@ const MyOrders: React.FC = () => {
                       {item.productName}
                     </Text>
                     <Text variant="bodySmall" style={styles.itemVariant}>
-                      {item.size} / {item.color} × {item.quantity}
+                      {item.size} × {item.quantity}
                     </Text>
                     <Text variant="bodyMedium" style={styles.itemPrice}>
                       ${(item.finalPrice * item.quantity).toFixed(2)}

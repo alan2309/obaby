@@ -159,7 +159,7 @@ const OrderScreen: React.FC = () => {
 
   const showOutOfStockAlert = (outOfStockItems: Array<{productName: string, size: string, color: string, availableStock: number, requestedQuantity: number}>) => {
     const alertMessage = outOfStockItems.map(item => 
-      `• ${item.productName} (${item.size}, ${item.color})\n  Available: ${item.availableStock}, Requested: ${item.requestedQuantity}`
+      `• ${item.productName} (${item.size})\n  Available: ${item.availableStock}, Requested: ${item.requestedQuantity}`
     ).join('\n\n');
 
     Alert.alert(
@@ -407,7 +407,7 @@ const OrderScreen: React.FC = () => {
                   <View style={styles.itemInfo}>
                     <Text style={styles.productName}>{item.product.title}</Text>
                     <Text style={styles.variantText}>
-                      {item.sizeVariant.size} • {item.sizeVariant.color}
+                      {item.sizeVariant.size}
                     </Text>
                     <View style={styles.priceRow}>
                       <Text style={styles.price}>

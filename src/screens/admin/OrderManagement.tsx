@@ -273,7 +273,7 @@ const OrderManagement: React.FC = () => {
         const remainingQty = i.quantity - deliveredQty;
         return `<tr>
           <td><strong>${i.productName ?? 'N/A'}</strong><div class="product-id">${(i.productId ?? 'N/A').toString().substring(0,8)}</div></td>
-          <td>${i.size ?? '-'} • ${i.color ?? '-'}</td>
+          <td>${i.size ?? '-'}</td>
           <td>${i.quantity ?? 0}</td>
           <td>
             ${deliveredQty > 0 ? `

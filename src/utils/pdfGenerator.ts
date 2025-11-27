@@ -353,7 +353,7 @@ const getUniqueVariants = (variants: ProductVariant[]): ProductVariant[] => {
   
   const uniqueMap = new Map();
   variants.forEach(variant => {
-    const key = `${variant.size}-${variant.color}`;
+    const key = `${variant.size}`;
     if (!uniqueMap.has(key)) {
       uniqueMap.set(key, variant);
     }

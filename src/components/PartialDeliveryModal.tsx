@@ -124,7 +124,7 @@ const PartialDeliveryModal: React.FC<PartialDeliveryModalProps> = ({
                       {item.productName}
                     </Text>
                     <Text variant="bodySmall" style={styles.itemDetails}>
-                      {item.size} | {item.color}
+                      {item.size}
                     </Text>
                   </View>
                   

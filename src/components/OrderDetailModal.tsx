@@ -113,7 +113,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                     </DataTable.Cell>
                     <DataTable.Cell>
                       <Text variant="bodySmall">
-                        {item.size} / {item.color}
+                        {item.size}
                       </Text>
                     </DataTable.Cell>
                     <DataTable.Cell numeric>
