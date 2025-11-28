@@ -192,7 +192,7 @@ const DashboardScreen: React.FC = () => {
   const chartConfig = {
     backgroundColor: theme.colors.surface,
     backgroundGradientFrom: theme.colors.surface,
-    backgroundGradientTo: theme.colors.surface,
+    backgroundGradientTo: theme.colors.secondary,
     decimalPlaces: 0,
     color: (opacity = 1) => `rgba(247, 202, 201, ${opacity})`,
     labelColor: (opacity = 1) => `rgba(59, 59, 59, ${opacity})`,

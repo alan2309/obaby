@@ -48,6 +48,7 @@ export interface Product {
   images: string[];
   sizes: ProductVariant[];
   active: boolean;
+  fullstock?: boolean;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -220,6 +221,7 @@ export const getProducts = async (includeInactive = false): Promise<Product[]> =
           stock: variant.stock || 0,
           production: variant.production || 0, // Add this line
         })) || [],
+        fullstock: data.fullstock || false,
         active: data.active !== undefined ? data.active : true,
         createdAt: data.createdAt?.toDate() || new Date(),
       } as Product;
@@ -551,7 +553,8 @@ export const checkOrderStock = async (items: OrderItem[]): Promise<{
 
     const variant = product.sizes.find(v => v.size === item.size && v.color === item.color);
 
-    if (!variant || variant.stock < item.quantity) {
+    if (!variant ||  !product.fullstock && variant.stock < item.quantity) {
+      console.log("product fullstock---",product.fullstock)
       outOfStockItems.push({
         productName: item.productName,
         size: item.size,
@@ -601,7 +604,7 @@ export const createOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updat
         };
       }
 
-      const variant = product.sizes.find(v => v.size === item.size && v.color === item.color);
+      const variant = product.sizes.find(v => v.size === item.size);
 
       if (!variant) {
         return {
@@ -610,7 +613,7 @@ export const createOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updat
         };
       }
 
-      if (variant.stock < item.quantity) {
+      if (!product.fullstock && variant.stock < item.quantity) {
         outOfStockItems.push({
           productName: item.productName,
           size: item.size,
@@ -660,8 +663,12 @@ export const createOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updat
 
     // Update stock after successful order creation
     for (const item of order.items) {
-      await updateProductStock(item.productId, item.size, item.color, item.quantity);
-    }
+  const product = await getProduct(item.productId);
+  if (product && !product.fullstock) {
+    // Only update stock if product is not marked as fullstock
+    await updateProductStock(item.productId, item.size, item.color, item.quantity);
+  }
+}
 
     // Update salesman stats
     const totalDiscount = order.items.reduce((sum, item) => sum + (item.discountGiven * item.quantity), 0);

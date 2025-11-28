@@ -28,6 +28,7 @@ interface ProductCatalogProps {
   onProductLongPress?: (product: Product) => void;
   selectedProducts?: Product[];
   isSelectionMode?: boolean;
+  showFullStockIndicator?: boolean;
 }
 
 interface ColorGroup {
@@ -110,6 +111,7 @@ const ProductCard = React.memo(
     isSelected = false,
     isSelectionMode = false,
     onOpenSizeModal,
+    showFullStockIndicator = false,
   }: {
     item: Product;
     onPress?: (p: Product) => void;
@@ -121,10 +123,11 @@ const ProductCard = React.memo(
     isSelected?: boolean;
     isSelectionMode?: boolean;
     onOpenSizeModal?: (product: Product) => void;
+    showFullStockIndicator?: boolean;
   }) => {
     const sizes = Array.isArray(item.sizes) ? item.sizes : [];
     const totalStock = sizes.reduce((t: number, v: any) => t + (v?.stock || 0), 0);
-    const isOutOfStock = totalStock === 0;
+    const isOutOfStock = totalStock === 0 && !item.fullstock;
 
     // Use full image height (more height than width)
     const imageHeight = Math.max(scaleSize(120), Math.round(cardWidth * 1.2));
@@ -187,13 +190,15 @@ const ProductCard = React.memo(
                 </View>
 
                 <View style={styles.chipsRow}>
-                  <Chip
-                    mode="outlined"
-                    style={[styles.stockChip, isOutOfStock ? styles.outOfStockChip : styles.inStockChip]}
-                    textStyle={styles.chipText}
-                  >
-                    {isOutOfStock ? "Out of stock" : `${totalStock} in stock`}
-                  </Chip>
+  
+                    <Chip
+                      mode="outlined"
+                      style={[styles.stockChip, isOutOfStock ? styles.outOfStockChip : styles.inStockChip]}
+                      textStyle={styles.chipText}
+                    >
+                      {isOutOfStock ? "Out of stock" : item.fullstock? "Full Stock": `${totalStock} in stock`}
+                    </Chip>
+                
 
                   <Chip mode="outlined" style={styles.categoryChip} textStyle={styles.chipText}>
                     {item.category || "—"}
@@ -301,6 +306,26 @@ const SizeSelectionModal: React.FC<{
 
   const cartItemCount = getTotalItems?.() ?? 0;
 
+  // Check if product has full stock
+  const isFullStockProduct = product?.fullstock || false;
+
+  // Calculate max quantity for selected variant (unlimited if full stock)
+  const getMaxQuantity = () => {
+    if (isFullStockProduct) {
+      return 9999; // Very high number to simulate unlimited
+    }
+    return selectedVariant?.stock || 0;
+  };
+
+  const handleQuantityIncrease = () => {
+    const maxQuantity = getMaxQuantity();
+    setQuantity(Math.min(maxQuantity, quantity + 1));
+  };
+
+  const handleQuantityDecrease = () => {
+    setQuantity(Math.max(1, quantity - 1));
+  };
+
   if (!product) return null;
 
   return (
@@ -332,16 +357,18 @@ const SizeSelectionModal: React.FC<{
                 <View key={colorGroup.color} style={styles.colorGroup}>
                   <View style={styles.colorHeader}>
                     <Text style={styles.colorName}>{colorGroup.color}</Text>
-                    <Text style={styles.colorStock}>
-                      {colorGroup.sizes.reduce((sum, item) => sum + item.stock, 0)} available
-                    </Text>
+                    {!isFullStockProduct && (
+                      <Text style={styles.colorStock}>
+                        {colorGroup.sizes.reduce((sum, item) => sum + item.stock, 0)} available
+                      </Text>
+                    )}
                   </View>
                   
                   <View style={styles.sizesContainer}>
                     {colorGroup.sizes.map((sizeItem, sizeIndex) => {
                       const isSelected = selectedVariant?.size === sizeItem.variant.size && 
                                        selectedVariant?.color === sizeItem.variant.color;
-                      const isOutOfStock = sizeItem.stock === 0;
+                      const isOutOfStock = sizeItem.stock === 0 && !isFullStockProduct;
                       
                       return (
                         <TouchableOpacity
@@ -367,7 +394,7 @@ const SizeSelectionModal: React.FC<{
                             ]}>
                               {sizeItem.size}
                             </Text>
-                            {!isOutOfStock && (
+                            {!isFullStockProduct && !isOutOfStock && (
                               <Text style={[
                                 styles.stockText,
                                 isSelected && styles.selectedStockText
@@ -397,33 +424,36 @@ const SizeSelectionModal: React.FC<{
                     Selected: {selectedVariant.size}
                   </Text>
                   <Text style={styles.selectedStockInfo}>
-                    Available: {selectedVariant.stock} units
+                    {isFullStockProduct ? "All available" : `Available: ${selectedVariant.stock} units`}
                   </Text>
                 </View>
 
                 <Text style={styles.sectionTitle}>Quantity</Text>
                 <View style={styles.quantityContainer}>
                   <Button
-                    mode="outlined"
-                    onPress={() => setQuantity(Math.max(1, quantity - 1))}
-                    disabled={quantity <= 1}
-                    style={styles.quantityButton}
-                    contentStyle={styles.quantityButtonContent}
-                  >
-                    -
+        mode="outlined"
+        onPress={handleQuantityDecrease}
+        disabled={quantity <= 1}
+        style={styles.quantityButton}
+        contentStyle={styles.quantityButtonContent}
+        textColor="#000000" // Black text color
+        icon="minus" // Add minus icon
+      >-
+                    
                   </Button>
                   <Text style={styles.quantityText}>{quantity}</Text>
                   <Button
-                    mode="outlined"
-                    onPress={() => setQuantity(Math.min(selectedVariant.stock ?? 0, quantity + 1))}
-                    disabled={quantity >= (selectedVariant.stock ?? 0)}
-                    style={styles.quantityButton}
-                    contentStyle={styles.quantityButtonContent}
-                  >
+        mode="outlined"
+        onPress={handleQuantityIncrease}
+        disabled={!isFullStockProduct && quantity >= (selectedVariant.stock ?? 0)}
+        style={styles.quantityButton}
+        contentStyle={styles.quantityButtonContent}
+        textColor="#000000" // Black text color
+        icon="plus" // Add plus icon
+      >
                     +
                   </Button>
                 </View>
-
                 <View style={styles.priceSummary}>
                   <Text style={styles.summaryText}>
                     Price: ₹{product.sellingPrice?.toFixed(2)} × {quantity}
@@ -482,7 +512,8 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
   screenTitle,
   onProductLongPress,
   selectedProducts = [],
-  isSelectionMode = false
+  isSelectionMode = false,
+  showFullStockIndicator = false
 }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -568,7 +599,13 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
   };
 
   const handleAddToCartWithSize = (product: Product, variant: any, quantity: number) => {
-    const cartItem: any = { product, sizeVariant: variant, quantity };
+    const cartItem: any = { 
+      product, 
+      sizeVariant: variant, 
+      quantity,
+      // Include fullstock info in cart item for later reference
+      isFullStock: product.fullstock || false
+    };
     addToCart(cartItem);
     // Snackbar is now handled inside the modal
   };
@@ -589,10 +626,11 @@ const ProductCatalog: React.FC<ProductCatalogProps> = ({
           isAdmin={user?.role === "admin"}
           isSelected={isSelected}
           isSelectionMode={isSelectionMode}
+          showFullStockIndicator={showFullStockIndicator}
         />
       );
     },
-    [onProductPress, onAddToCart, onProductLongPress, showAddToCart, cardWidth, user?.role, selectedProducts, isSelectionMode]
+    [onProductPress, onAddToCart, onProductLongPress, showAddToCart, cardWidth, user?.role, selectedProducts, isSelectionMode, showFullStockIndicator]
   );
 
   const keyExtractor = useCallback((item: Product, index: number) => item.id ?? `${item.title ?? 'product'}-${index}`, []);
@@ -852,6 +890,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFEBEE",
     borderColor: "#FF5252",
   },
+  fullstockChip: {
+    height: scaleSize(28),
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: scaleSize(6),
+    backgroundColor: "#E3F2FD",
+    borderColor: "#2196F3",
+  },
   categoryChip: {
     height: scaleSize(28),
     flex: 1,
@@ -969,6 +1016,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#4ECDC4",
   },
+  fullstockModalChip: {
+    alignSelf: 'flex-start',
+    marginTop: scaleSize(8),
+    backgroundColor: "#E8F5FD",
+    borderColor: "#2196F3",
+  },
+  fullstockModalChipText: {
+    fontSize: scaleFont(11),
+    fontWeight: "600",
+    color: "#1976D2",
+  },
   sectionTitle: {
     color: "#333",
     marginBottom: scaleSize(12),
@@ -1078,25 +1136,27 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(12),
   },
   quantityContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    marginBottom: scaleSize(16),
-  },
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "flex-start",
+  marginBottom: scaleSize(8),
+},
   quantityButton: {
     borderColor: "#4ECDC4",
+    backgroundColor: "transparent",
   },
   quantityButtonContent: {
     width: scaleSize(36),
     height: scaleSize(36),
   },
   quantityText: {
-    fontSize: scaleFont(16),
-    fontWeight: "700",
-    marginHorizontal: scaleSize(12),
-    minWidth: scaleSize(35),
-    textAlign: "center",
-  },
+  fontSize: scaleFont(16),
+  fontWeight: "700",
+  marginHorizontal: scaleSize(12),
+  minWidth: scaleSize(35),
+  textAlign: "center",
+  color: "#000000", // Black text
+},
   priceSummary: {
     backgroundColor: "#FFF9C4",
     padding: scaleSize(12),

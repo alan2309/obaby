@@ -62,8 +62,14 @@ const InventoryScreen: React.FC = () => {
     return variants.reduce((total, variant) => total + variant.stock, 0);
   };
 
-  // Updated low stock logic: if any variant stock <= 3, mark as low stock
-  const getStockStatus = (variants: any[]) => {
+  // Updated stock status logic with fullstock support
+  const getStockStatus = (product: Product) => {
+    // If product is fullstock, always show "In Stock"
+    if (product.fullstock) {
+      return { status: 'In Stock', color: '#4CAF50' };
+    }
+    
+    const variants = product.sizes;
     const totalStock = getTotalStock(variants);
     
     if (totalStock === 0) return { status: 'Out of Stock', color: '#FF5252' };
@@ -75,14 +81,22 @@ const InventoryScreen: React.FC = () => {
     return { status: 'In Stock', color: '#4CAF50' };
   };
 
-  // Check if product has any low stock variant (stock <= 3)
-  const hasLowStockVariant = (variants: any[]): boolean => {
-    return variants.some(variant => variant.stock <= 3 && variant.stock > 0);
+  // Check if product has any low stock variant (stock <= 3) - exclude fullstock products
+  const hasLowStockVariant = (product: Product): boolean => {
+    if (product.fullstock) return false; // Fullstock products never show as low stock
+    return product.sizes.some(variant => variant.stock <= 3 && variant.stock > 0);
   };
 
-  // Check if product is out of stock (all variants = 0)
-  const isOutOfStock = (variants: any[]): boolean => {
-    return variants.every(variant => variant.stock === 0);
+  // Check if product is out of stock (all variants = 0) - exclude fullstock products
+  const isOutOfStock = (product: Product): boolean => {
+    if (product.fullstock) return false; // Fullstock products never show as out of stock
+    return product.sizes.every(variant => variant.stock === 0);
+  };
+
+  // Check if product is in stock (not low stock and not out of stock) or is fullstock
+  const isInStock = (product: Product): boolean => {
+    if (product.fullstock) return true; // Fullstock products are always in stock
+    return !hasLowStockVariant(product) && !isOutOfStock(product);
   };
 
   const openProductModal = (product: Product) => {
@@ -95,10 +109,30 @@ const InventoryScreen: React.FC = () => {
     setSelectedProduct(null);
   };
 
-  const getVariantStockStatus = (stock: number) => {
+  const getVariantStockStatus = (product: Product, stock: number) => {
+    // If product is fullstock, always show "In Stock" regardless of actual stock value
+    if (product.fullstock) {
+      return { status: 'In Stock', color: '#4CAF50' };
+    }
+    
     if (stock === 0) return { status: 'Out of Stock', color: '#FF5252' };
     if (stock <= 3) return { status: 'Low Stock', color: '#FF9800' };
     return { status: 'In Stock', color: '#4CAF50' };
+  };
+
+  // Helper function to get dynamic table column styles
+  const getTableColumnStyles = (isFullstock: boolean = false) => {
+    return {
+      sizeColumn: {
+        flex: isFullstock ? 2 : 1.5,
+        justifyContent: 'center' as const,
+      },
+      statusColumn: {
+        flex: isFullstock ? 2 : 1.5,
+        justifyContent: 'center' as const,
+        paddingLeft: scaleSize(12),
+      },
+    };
   };
 
   return (
@@ -137,7 +171,7 @@ const InventoryScreen: React.FC = () => {
 
           {filteredProducts.map((product) => {
             const totalStock = getTotalStock(product.sizes);
-            const stockStatus = getStockStatus(product.sizes);
+            const stockStatus = getStockStatus(product);
             
             return (
               <DataTable.Row 
@@ -146,9 +180,12 @@ const InventoryScreen: React.FC = () => {
                 style={styles.tableRow}
               >
                 <DataTable.Cell>
-                  <Text variant="bodyMedium" numberOfLines={1} style={styles.productName}>
-                    {product.title}
-                  </Text>
+                  <View style={styles.productCell}>
+                    <Text variant="bodyMedium" numberOfLines={1} style={styles.productName}>
+                      {product.title}
+                    </Text>
+                   
+                  </View>
                 </DataTable.Cell>
                 <DataTable.Cell>
                   <Chip mode="outlined" compact style={styles.categoryChip}>
@@ -157,7 +194,7 @@ const InventoryScreen: React.FC = () => {
                 </DataTable.Cell>
                 <DataTable.Cell numeric>
                   <Text variant="bodyMedium" style={[styles.stockText, { color: stockStatus.color }]}>
-                    {totalStock}
+                    {product.fullstock ? 'Full' : totalStock}
                   </Text>
                 </DataTable.Cell>
                 <DataTable.Cell>
@@ -202,23 +239,27 @@ const InventoryScreen: React.FC = () => {
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text variant="headlineSmall" style={styles.statNumber}>
-                  {products.filter(p => 
-                    !hasLowStockVariant(p.sizes) && !isOutOfStock(p.sizes)
-                  ).length}
+                  {products.filter(p => isInStock(p)).length}
                 </Text>
                 <Text variant="bodyMedium">In Stock</Text>
               </View>
               <View style={styles.statItem}>
                 <Text variant="headlineSmall" style={[styles.statNumber, styles.lowStock]}>
-                  {products.filter(p => hasLowStockVariant(p.sizes)).length}
+                  {products.filter(p => hasLowStockVariant(p)).length}
                 </Text>
                 <Text variant="bodyMedium">Low Stock</Text>
               </View>
               <View style={styles.statItem}>
                 <Text variant="headlineSmall" style={[styles.statNumber, styles.outOfStock]}>
-                  {products.filter(p => isOutOfStock(p.sizes)).length}
+                  {products.filter(p => isOutOfStock(p)).length}
                 </Text>
                 <Text variant="bodyMedium">Out of Stock</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text variant="headlineSmall" style={[styles.statNumber, styles.fullstockStat]}>
+                  {products.filter(p => p.fullstock).length}
+                </Text>
+                <Text variant="bodyMedium">Fullstock</Text>
               </View>
             </View>
           </Card.Content>
@@ -242,31 +283,44 @@ const InventoryScreen: React.FC = () => {
                 <Chip mode="outlined" style={styles.modalCategoryChip}>
                   {selectedProduct.category}
                 </Chip>
+                {selectedProduct.fullstock && (
+                  <Chip mode="outlined" style={styles.fullstockChip} compact>
+                    Fullstock Product
+                  </Chip>
+                )}
               </View>
 
               <DataTable style={styles.modalTable}>
                 <DataTable.Header>
-                  <DataTable.Title style={styles.sizeColumn}>Size</DataTable.Title>
-                  <DataTable.Title numeric style={styles.stockColumn}>Stock</DataTable.Title>
-                  <DataTable.Title style={styles.statusColumn}>Status</DataTable.Title>
+                  <DataTable.Title style={getTableColumnStyles(selectedProduct.fullstock || false).sizeColumn}>
+                    Size
+                  </DataTable.Title>
+                  {!selectedProduct.fullstock && (
+                    <DataTable.Title numeric style={styles.stockColumn}>Stock</DataTable.Title>
+                  )}
+                  <DataTable.Title style={getTableColumnStyles(selectedProduct.fullstock || false).statusColumn}>
+                    Status
+                  </DataTable.Title>
                 </DataTable.Header>
 
                 {selectedProduct.sizes.map((variant, index) => {
-                  const variantStatus = getVariantStockStatus(variant.stock);
+                  const variantStatus = getVariantStockStatus(selectedProduct, variant.stock);
                   return (
                     <DataTable.Row key={index}>
-                      <DataTable.Cell style={styles.sizeColumn}>
+                      <DataTable.Cell style={getTableColumnStyles(selectedProduct.fullstock || false).sizeColumn}>
                         <Text variant="bodyMedium">{variant.size}</Text>
                       </DataTable.Cell>
-                      <DataTable.Cell numeric style={styles.stockColumn}>
-                        <Text 
-                          variant="bodyMedium" 
-                          style={[styles.variantStock, { color: variantStatus.color }]}
-                        >
-                          {variant.stock}
-                        </Text>
-                      </DataTable.Cell>
-                      <DataTable.Cell style={styles.statusColumn}>
+                      {!selectedProduct.fullstock && (
+                        <DataTable.Cell numeric style={styles.stockColumn}>
+                          <Text 
+                            variant="bodyMedium" 
+                            style={[styles.variantStock, { color: variantStatus.color }]}
+                          >
+                            {variant.stock}
+                          </Text>
+                        </DataTable.Cell>
+                      )}
+                      <DataTable.Cell style={getTableColumnStyles(selectedProduct.fullstock || false).statusColumn}>
                         <Chip 
                           mode="outlined"
                           textStyle={{ 
@@ -284,17 +338,27 @@ const InventoryScreen: React.FC = () => {
                 })}
               </DataTable>
 
-              <View style={styles.totalStockSection}>
-                <Text variant="titleSmall" style={styles.totalStockLabel}>
-                  Total Stock:
-                </Text>
-                <Text variant="headlineSmall" style={[
-                  styles.totalStockValue,
-                  { color: getStockStatus(selectedProduct.sizes).color }
-                ]}>
-                  {getTotalStock(selectedProduct.sizes)}
-                </Text>
-              </View>
+              {!selectedProduct.fullstock && (
+                <View style={styles.totalStockSection}>
+                  <Text variant="titleSmall" style={styles.totalStockLabel}>
+                    Total Stock:
+                  </Text>
+                  <Text variant="headlineSmall" style={[
+                    styles.totalStockValue,
+                    { color: getStockStatus(selectedProduct).color }
+                  ]}>
+                    {getTotalStock(selectedProduct.sizes)}
+                  </Text>
+                </View>
+              )}
+
+              {selectedProduct.fullstock && (
+                <View style={styles.fullstockNote}>
+                  <Text variant="bodySmall" style={styles.fullstockNoteText}>
+                    This is a fullstock product. Stock levels are not tracked and orders do not reduce inventory.
+                  </Text>
+                </View>
+              )}
 
               <Button 
                 mode="contained" 
@@ -336,9 +400,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
+  productCell: {
+    flex: 1,
+  },
   productName: {
     fontWeight: '600',
     color: '#3B3B3B',
+    marginBottom: scaleSize(4),
+  },
+  fullstockChip: {
+    backgroundColor: '#E8F5E8',
+    borderColor: '#4CAF50',
   },
   categoryChip: {
     backgroundColor: '#E3F2FD',
@@ -373,10 +445,13 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
   statItem: {
     alignItems: 'center',
+    minWidth: '23%',
+    marginBottom: scaleSize(8),
   },
   statNumber: {
     fontWeight: 'bold',
@@ -387,6 +462,9 @@ const styles = StyleSheet.create({
   },
   outOfStock: {
     color: '#FF5252',
+  },
+  fullstockStat: {
+    color: '#2196F3',
   },
   // Modal Styles
   modalContainer: {
@@ -406,28 +484,19 @@ const styles = StyleSheet.create({
   productInfo: {
     marginBottom: scaleSize(20),
     alignItems: 'center',
+    gap: scaleSize(8),
   },
   modalCategoryChip: {
     backgroundColor: '#E3F2FD',
-    marginBottom: scaleSize(8),
   },
   // Modal Table Styles with proper spacing
   modalTable: {
     marginBottom: scaleSize(16),
   },
-  sizeColumn: {
-    flex: 1.5,
-    justifyContent: 'center',
-  },
   stockColumn: {
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: scaleSize(8),
-  },
-  statusColumn: {
-    flex: 1.5,
-    justifyContent: 'center',
-    paddingLeft: scaleSize(12),
   },
   variantStock: {
     fontWeight: 'bold',
@@ -452,6 +521,19 @@ const styles = StyleSheet.create({
   },
   totalStockValue: {
     fontWeight: 'bold',
+  },
+  fullstockNote: {
+    marginTop: scaleSize(20),
+    padding: scaleSize(16),
+    backgroundColor: '#E8F5E8',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  fullstockNoteText: {
+    color: '#2E7D32',
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   closeButton: {
     marginTop: scaleSize(20),

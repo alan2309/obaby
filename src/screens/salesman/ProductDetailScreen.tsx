@@ -165,6 +165,9 @@ const { user } = useAuth();
     "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400",
   ];
 
+  // Check if product has full stock
+  const isFullStockProduct = product.fullstock || false;
+
   // Group variants by color with proper size ordering
   const colorGroups = useMemo((): ColorGroup[] => {
     const groups: { [key: string]: ColorGroup } = {};
@@ -196,15 +199,32 @@ const { user } = useAuth();
     return Object.values(groups).sort((a, b) => a.color.localeCompare(b.color));
   }, [sizes]);
 
-  // metrics
+  // metrics - updated for full stock
   const totalStock = useMemo(
     () => sizes.reduce((total, v) => total + (v?.stock ?? 0), 0),
     [sizes]
   );
   const availableVariants = useMemo(
-    () => sizes.filter((v) => (v?.stock ?? 0) > 0),
-    [sizes]
+    () => isFullStockProduct ? sizes : sizes.filter((v) => (v?.stock ?? 0) > 0),
+    [sizes, isFullStockProduct]
   );
+
+  // Calculate max quantity for selected variant (unlimited if full stock)
+  const getMaxQuantity = () => {
+    if (isFullStockProduct) {
+      return 9999; // Very high number to simulate unlimited
+    }
+    return selectedVariant?.stock || 0;
+  };
+
+  const handleQuantityIncrease = () => {
+    const maxQuantity = getMaxQuantity();
+    setQuantity(Math.min(maxQuantity, quantity + 1));
+  };
+
+  const handleQuantityDecrease = () => {
+    setQuantity(Math.max(1, quantity - 1));
+  };
 
   const handleAddToCart = () => {
     if (!selectedVariant) {
@@ -212,18 +232,28 @@ const { user } = useAuth();
       setSnackbarVisible(true);
       return;
     }
-    const stock = selectedVariant.stock ?? 0;
-    if (stock === 0) {
-      setSnackbarMessage("Selected variant is out of stock");
-      setSnackbarVisible(true);
-      return;
+
+    // For full stock products, no stock validation needed
+    if (!isFullStockProduct) {
+      const stock = selectedVariant.stock ?? 0;
+      if (stock === 0) {
+        setSnackbarMessage("Selected variant is out of stock");
+        setSnackbarVisible(true);
+        return;
+      }
+      if (quantity > stock) {
+        setSnackbarMessage(`Only ${stock} units available`);
+        setSnackbarVisible(true);
+        return;
+      }
     }
-    if (quantity > stock) {
-      setSnackbarMessage(`Only ${stock} units available`);
-      setSnackbarVisible(true);
-      return;
-    }
-    const cartItem: any = { product, sizeVariant: selectedVariant, quantity };
+
+    const cartItem: any = { 
+      product, 
+      sizeVariant: selectedVariant, 
+      quantity,
+      isFullStock: isFullStockProduct 
+    };
     addToCart(cartItem);
     setSnackbarMessage("Product added to order cart!");
     setSnackbarVisible(true);
@@ -361,15 +391,23 @@ const { user } = useAuth();
                 <Text variant={priceVariant as any} style={styles.sellingPrice}>
                   ₹{product.sellingPrice?.toFixed(2)}
                 </Text>
+                {isFullStockProduct && (
+                  <Chip mode="outlined" style={styles.fullstockChip} textStyle={styles.fullstockChipText}>
+                    Full Stock
+                  </Chip>
+                )}
               </View>
 
               <View style={styles.stockRow}>
                 <Chip
                   mode="outlined"
-                  style={[styles.stockChip, totalStock > 0 ? styles.inStockChip : styles.outOfStockChip]}
+                  style={[
+                    styles.stockChip, 
+                    (totalStock > 0 || isFullStockProduct) ? styles.inStockChip : styles.outOfStockChip
+                  ]}
                   textStyle={styles.chipText}
                 >
-                  {totalStock > 0 ? `${totalStock} in stock` : "Out of stock"}
+                  {isFullStockProduct ? "Full Stock" : (totalStock > 0 ? `${totalStock} in stock` : "Out of stock")}
                 </Chip>
 
                 {product.category && (
@@ -390,16 +428,18 @@ const { user } = useAuth();
                   <View key={colorGroup.color} style={styles.colorGroup}>
                     <View style={styles.colorHeader}>
                       <Text style={styles.colorName}>{colorGroup.color}</Text>
-                      <Text style={styles.colorStock}>
-                        {colorGroup.sizes.reduce((sum, item) => sum + item.stock, 0)} available
-                      </Text>
+                      {!isFullStockProduct && (
+                        <Text style={styles.colorStock}>
+                          {colorGroup.sizes.reduce((sum, item) => sum + item.stock, 0)} available
+                        </Text>
+                      )}
                     </View>
                     
                     <View style={styles.sizesContainer}>
                       {colorGroup.sizes.map((sizeItem, sizeIndex) => {
                         const isSelected = selectedVariant?.size === sizeItem.variant.size && 
                                          selectedVariant?.color === sizeItem.variant.color;
-                        const isOutOfStock = sizeItem.stock === 0;
+                        const isOutOfStock = sizeItem.stock === 0 && !isFullStockProduct;
                         
                         return (
                           <TouchableOpacity
@@ -425,7 +465,7 @@ const { user } = useAuth();
                               ]}>
                                 {sizeItem.size}
                               </Text>
-                              {!isOutOfStock && (
+                              {!isFullStockProduct && !isOutOfStock && (
                                 <Text style={[
                                   styles.stockText,
                                   isSelected && styles.selectedStockText
@@ -450,28 +490,39 @@ const { user } = useAuth();
 
               {selectedVariant && (
                 <>
+                  <View style={styles.selectedVariantInfo}>
+                    <Text style={styles.selectedVariantText}>
+                      Selected: {selectedVariant.size}
+                    </Text>
+                    <Text style={styles.selectedStockInfo}>
+                      {isFullStockProduct ? "All available" : `Available: ${selectedVariant.stock} units`}
+                    </Text>
+                  </View>
+
                   <Text variant={sectionVariant as any} style={styles.sectionTitle}>
                     Quantity
                   </Text>
                   <View style={styles.quantityContainer}>
                     <Button
                       mode="outlined"
-                      onPress={() => setQuantity(Math.max(1, quantity - 1))}
+                      onPress={handleQuantityDecrease}
                       disabled={quantity <= 1}
                       style={styles.quantityButton}
                       contentStyle={styles.quantityButtonContent}
-                    >
-                      -
+                      textColor="#000000"
+                      icon="minus" children={undefined}                    >
+                      {/* Empty text to use icon only */}
                     </Button>
                     <Text style={styles.quantityText}>{quantity}</Text>
                     <Button
                       mode="outlined"
-                      onPress={() => setQuantity(Math.min(selectedVariant.stock ?? 0, quantity + 1))}
-                      disabled={quantity >= (selectedVariant.stock ?? 0)}
+                      onPress={handleQuantityIncrease}
+                      disabled={!isFullStockProduct && quantity >= (selectedVariant.stock ?? 0)}
                       style={styles.quantityButton}
                       contentStyle={styles.quantityButtonContent}
-                    >
-                      +
+                      textColor="#000000"
+                      icon="plus" children={undefined}                    >
+                      {/* Empty text to use icon only */}
                     </Button>
                   </View>
 
@@ -646,6 +697,15 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(14),
     textDecorationLine: "line-through",
   },
+  fullstockChip: {
+    backgroundColor: "#E3F2FD",
+    borderColor: "#2196F3",
+  },
+  fullstockChipText: {
+    fontSize: scaleFont(11),
+    fontWeight: "600",
+    color: "#1976D2",
+  },
 
   stockRow: {
     flexDirection: "row",
@@ -754,6 +814,26 @@ const styles = StyleSheet.create({
     color: "#1976D2",
   },
 
+  // Selected Variant Info
+  selectedVariantInfo: {
+    backgroundColor: "#E8F4FD",
+    padding: theme.spacing.sm,
+    borderRadius: theme.roundness,
+    marginBottom: theme.spacing.sm,
+    borderLeftWidth: 4,
+    borderLeftColor: "#2196F3",
+  },
+  selectedVariantText: {
+    fontSize: scaleFont(14),
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: scaleSize(4),
+  },
+  selectedStockInfo: {
+    fontSize: scaleFont(12),
+    color: "#666",
+  },
+
   noVariantsText: {
     color: theme.colors.placeholder,
     fontStyle: "italic",
@@ -770,17 +850,30 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm, // Reduced from md
   },
   quantityButton: {
-    borderColor: theme.colors.accent,
+    borderColor: "#000000",
+    backgroundColor: "transparent",
   },
   quantityButtonContent: {
     width: scaleSize(36), // Reduced from 44
     height: scaleSize(36), // Reduced from 44
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 0,
+    margin: 0,
   },
   quantityText: {
     fontSize: scaleFont(14), // Reduced from 16
     fontWeight: "700",
     marginHorizontal: scaleSize(10), // Reduced from 12
     minWidth: scaleSize(35), // Reduced from 40
+    textAlign: "center",
+    color: "#000000",
+  },
+  unlimitedNote: {
+    fontSize: scaleFont(11),
+    color: "#2196F3",
+    fontStyle: "italic",
+    marginBottom: theme.spacing.sm,
     textAlign: "center",
   },
 

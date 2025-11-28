@@ -22,6 +22,7 @@ import {
   FAB,
   Searchbar,
   SegmentedButtons,
+  Switch,
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -60,7 +61,8 @@ const ProductManagement: React.FC = () => {
   const [images, setImages] = useState<string[]>([]);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [uploading, setUploading] = useState(false);
-
+  const [fullstock, setFullstock] = useState(false);
+const isEditingRef = React.useRef(false);
   // Category form state
   const [newCategoryName, setNewCategoryName] = useState('');
 
@@ -73,17 +75,23 @@ const ProductManagement: React.FC = () => {
   }, []);
 
   // Auto-fill standard sizes when modal opens for new product
-  useEffect(() => {
-    if (modalVisible && !editingProduct && variants.length === 0) {
-      const standardVariants = standardSizes.map((size) => ({
-        size,
-        color: 'Default',
-        stock: 1,
-        production: 1,
-      }));
-      setVariants(standardVariants);
-    }
-  }, [modalVisible, editingProduct]);
+useEffect(() => {
+  // Only auto-fill for new products, not when editing
+  if (modalVisible && !isEditingRef.current && variants.length === 0) {
+    const standardVariants = standardSizes.map((size) => ({
+      size,
+      color: 'Default',
+      stock: fullstock ? 1 : 1,
+      production: fullstock ? 1 : 1,
+    }));
+    setVariants(standardVariants);
+  }
+  
+  // Reset the editing flag when modal closes
+  if (!modalVisible) {
+    isEditingRef.current = false;
+  }
+}, [modalVisible, variants.length, fullstock]);
 
   const loadProducts = async () => {
     try {
@@ -125,7 +133,12 @@ const ProductManagement: React.FC = () => {
 
   // Add a single variant
   const addVariant = () => {
-    setVariants([...variants, { size: '', color: 'Default', stock: 1, production: 1 }]);
+    setVariants([...variants, { 
+      size: '', 
+      color: 'Default', 
+      stock: fullstock ? 1 : 1, 
+      production: fullstock ? 1 : 1 
+    }]);
   };
 
   const updateVariant = (
@@ -186,6 +199,23 @@ const ProductManagement: React.FC = () => {
     }
   };
 
+  // Fullstock toggle handler
+ const handleFullstockToggle = () => {
+  const newFullstock = !fullstock;
+  setFullstock(newFullstock);
+  
+  if (newFullstock) {
+    // When enabling fullstock, set all variants to stock: 1 and production: 1
+    const updatedVariants = variants.map(variant => ({
+      ...variant,
+      stock: 1,
+      production: 1
+    }));
+    setVariants(updatedVariants);
+  }
+  // When disabling fullstock, we don't need to change anything
+  // The user can manually adjust stock and production values
+};
   const clearAllVariants = () => {
     Alert.alert('Clear All Variants', 'Are you sure you want to remove all variants?', [
       { text: 'Cancel', style: 'cancel' },
@@ -201,8 +231,8 @@ const ProductManagement: React.FC = () => {
     const standardVariants = standardSizes.map((size) => ({
       size,
       color: 'Default',
-      stock: 1,
-      production: 1,
+      stock: fullstock ? 1 : 1,
+      production: fullstock ? 1 : 1,
     }));
     setVariants(standardVariants);
     Alert.alert('Success', 'Reset to standard sizes');
@@ -235,6 +265,7 @@ const ProductManagement: React.FC = () => {
         images,
         sizes: variants,
         active: true,
+        fullstock, // Add fullstock field
       };
 
       let successMessage = 'Product added successfully';
@@ -271,18 +302,21 @@ const ProductManagement: React.FC = () => {
     setVariants([]);
     setEditingProduct(null);
     setShowCategoryDropdown(false);
+    setFullstock(false);
   };
 
-  const editProduct = (product: Product) => {
-    setEditingProduct(product);
-    setTitle(product.title);
-    setCategory(product.category);
-    setCategoryId(product.categoryId);
-    setSellingPrice((product.sellingPrice ?? 0).toString());
-    setImages(product.images ?? []);
-    setVariants(product.sizes ?? []);
-    setModalVisible(true);
-  };
+const editProduct = (product: Product) => {
+  isEditingRef.current = true;
+  setEditingProduct(product);
+  setTitle(product.title);
+  setCategory(product.category);
+  setCategoryId(product.categoryId);
+  setSellingPrice((product.sellingPrice ?? 0).toString());
+  setImages(product.images ?? []);
+  setVariants(product.sizes ?? []);
+  setFullstock(product.fullstock ?? false);
+  setModalVisible(true);
+};
 
   const handleDelete = async (product: Product) => {
     Alert.alert('Delete Product', `Are you sure you want to delete ${product.title}?`, [
@@ -409,7 +443,7 @@ const ProductManagement: React.FC = () => {
               style={product.active ? styles.activeChip : styles.inactiveChip}
               compact
             >
-              {product.active ? 'Active' : 'Inactive'}
+              {product.fullstock ? 'Full Stock' : 'Limited'}
             </Chip>
             <View style={styles.mobileActionButtons}>
               <Button 
@@ -458,71 +492,73 @@ const ProductManagement: React.FC = () => {
           />
         </View>
         
-        <View style={styles.mobileControlsRow}>
-          {/* Stock Controls */}
-          <View style={styles.mobileControlGroup}>
-            <Text variant="bodySmall" style={styles.mobileControlLabel}>
-              Stock
-            </Text>
-            <View style={styles.mobileNumberControls}>
-              <IconButton 
-                icon="minus" 
-                size={18}
-                onPress={() => decreaseStock(index)}
-                disabled={variant.stock <= 0}
-                iconColor={variant.stock <= 0 ? '#ccc' : '#D32F2F'}
-                style={styles.mobileIconButton}
-              />
-              <TextInput
-                value={variant.stock.toString()}
-                onChangeText={(value) => handleStockChange(index, value)}
-                style={styles.mobileNumberInput}
-                mode="outlined"
-                keyboardType="numeric"
-                dense
-              />
-              <IconButton 
-                icon="plus" 
-                size={18}
-                onPress={() => increaseStock(index)}
-                iconColor="#4CAF50"
-                style={styles.mobileIconButton}
-              />
+        {!fullstock && (
+          <View style={styles.mobileControlsRow}>
+            {/* Stock Controls */}
+            <View style={styles.mobileControlGroup}>
+              <Text variant="bodySmall" style={styles.mobileControlLabel}>
+                Stock
+              </Text>
+              <View style={styles.mobileNumberControls}>
+                <IconButton 
+                  icon="minus" 
+                  size={18}
+                  onPress={() => decreaseStock(index)}
+                  disabled={variant.stock <= 0}
+                  iconColor={variant.stock <= 0 ? '#ccc' : '#D32F2F'}
+                  style={styles.mobileIconButton}
+                />
+                <TextInput
+                  value={variant.stock.toString()}
+                  onChangeText={(value) => handleStockChange(index, value)}
+                  style={styles.mobileNumberInput}
+                  mode="outlined"
+                  keyboardType="numeric"
+                  dense
+                />
+                <IconButton 
+                  icon="plus" 
+                  size={18}
+                  onPress={() => increaseStock(index)}
+                  iconColor="#4CAF50"
+                  style={styles.mobileIconButton}
+                />
+              </View>
             </View>
-          </View>
 
-          {/* Production Controls */}
-          <View style={styles.mobileControlGroup}>
-            <Text variant="bodySmall" style={styles.mobileControlLabel}>
-              Production
-            </Text>
-            <View style={styles.mobileNumberControls}>
-              <IconButton 
-                icon="minus" 
-                size={18}
-                onPress={() => decreaseProduction(index)}
-                disabled={variant.production <= 0}
-                iconColor={variant.production <= 0 ? '#ccc' : '#D32F2F'}
-                style={styles.mobileIconButton}
-              />
-              <TextInput
-                value={variant.production.toString()}
-                onChangeText={(value) => handleProductionChange(index, value)}
-                style={styles.mobileNumberInput}
-                mode="outlined"
-                keyboardType="numeric"
-                dense
-              />
-              <IconButton 
-                icon="plus" 
-                size={18}
-                onPress={() => increaseProduction(index)}
-                iconColor="#4CAF50"
-                style={styles.mobileIconButton}
-              />
+            {/* Production Controls */}
+            <View style={styles.mobileControlGroup}>
+              <Text variant="bodySmall" style={styles.mobileControlLabel}>
+                Production
+              </Text>
+              <View style={styles.mobileNumberControls}>
+                <IconButton 
+                  icon="minus" 
+                  size={18}
+                  onPress={() => decreaseProduction(index)}
+                  disabled={variant.production <= 0}
+                  iconColor={variant.production <= 0 ? '#ccc' : '#D32F2F'}
+                  style={styles.mobileIconButton}
+                />
+                <TextInput
+                  value={variant.production.toString()}
+                  onChangeText={(value) => handleProductionChange(index, value)}
+                  style={styles.mobileNumberInput}
+                  mode="outlined"
+                  keyboardType="numeric"
+                  dense
+                />
+                <IconButton 
+                  icon="plus" 
+                  size={18}
+                  onPress={() => increaseProduction(index)}
+                  iconColor="#4CAF50"
+                  style={styles.mobileIconButton}
+                />
+              </View>
             </View>
           </View>
-        </View>
+        )}
       </Card.Content>
     </Card>
   );
@@ -542,65 +578,69 @@ const ProductManagement: React.FC = () => {
             placeholder="S, M, L..."
           />
           
-          {/* Stock Controls */}
-          <View style={styles.desktopControlGroup}>
-            <Text variant="bodySmall" style={styles.desktopControlLabel}>
-              Stock
-            </Text>
-            <View style={styles.desktopNumberControls}>
-              <IconButton 
-                icon="minus" 
-                size={18}
-                onPress={() => decreaseStock(index)}
-                disabled={variant.stock <= 0}
-                iconColor={variant.stock <= 0 ? '#ccc' : '#D32F2F'}
-              />
-              <TextInput
-                value={variant.stock.toString()}
-                onChangeText={(value) => handleStockChange(index, value)}
-                style={styles.desktopNumberInput}
-                mode="outlined"
-                keyboardType="numeric"
-                dense
-              />
-              <IconButton 
-                icon="plus" 
-                size={18}
-                onPress={() => increaseStock(index)}
-                iconColor="#4CAF50"
-              />
-            </View>
-          </View>
+          {!fullstock && (
+            <>
+              {/* Stock Controls */}
+              <View style={styles.desktopControlGroup}>
+                <Text variant="bodySmall" style={styles.desktopControlLabel}>
+                  Stock
+                </Text>
+                <View style={styles.desktopNumberControls}>
+                  <IconButton 
+                    icon="minus" 
+                    size={18}
+                    onPress={() => decreaseStock(index)}
+                    disabled={variant.stock <= 0}
+                    iconColor={variant.stock <= 0 ? '#ccc' : '#D32F2F'}
+                  />
+                  <TextInput
+                    value={variant.stock.toString()}
+                    onChangeText={(value) => handleStockChange(index, value)}
+                    style={styles.desktopNumberInput}
+                    mode="outlined"
+                    keyboardType="numeric"
+                    dense
+                  />
+                  <IconButton 
+                    icon="plus" 
+                    size={18}
+                    onPress={() => increaseStock(index)}
+                    iconColor="#4CAF50"
+                  />
+                </View>
+              </View>
 
-          {/* Production Controls */}
-          <View style={styles.desktopControlGroup}>
-            <Text variant="bodySmall" style={styles.desktopControlLabel}>
-              Production
-            </Text>
-            <View style={styles.desktopNumberControls}>
-              <IconButton 
-                icon="minus" 
-                size={18}
-                onPress={() => decreaseProduction(index)}
-                disabled={variant.production <= 0}
-                iconColor={variant.production <= 0 ? '#ccc' : '#D32F2F'}
-              />
-              <TextInput
-                value={variant.production.toString()}
-                onChangeText={(value) => handleProductionChange(index, value)}
-                style={styles.desktopNumberInput}
-                mode="outlined"
-                keyboardType="numeric"
-                dense
-              />
-              <IconButton 
-                icon="plus" 
-                size={18}
-                onPress={() => increaseProduction(index)}
-                iconColor="#4CAF50"
-              />
-            </View>
-          </View>
+              {/* Production Controls */}
+              <View style={styles.desktopControlGroup}>
+                <Text variant="bodySmall" style={styles.desktopControlLabel}>
+                  Production
+                </Text>
+                <View style={styles.desktopNumberControls}>
+                  <IconButton 
+                    icon="minus" 
+                    size={18}
+                    onPress={() => decreaseProduction(index)}
+                    disabled={variant.production <= 0}
+                    iconColor={variant.production <= 0 ? '#ccc' : '#D32F2F'}
+                  />
+                  <TextInput
+                    value={variant.production.toString()}
+                    onChangeText={(value) => handleProductionChange(index, value)}
+                    style={styles.desktopNumberInput}
+                    mode="outlined"
+                    keyboardType="numeric"
+                    dense
+                  />
+                  <IconButton 
+                    icon="plus" 
+                    size={18}
+                    onPress={() => increaseProduction(index)}
+                    iconColor="#4CAF50"
+                  />
+                </View>
+              </View>
+            </>
+          )}
 
           <IconButton 
             icon="delete" 
@@ -678,16 +718,18 @@ const ProductManagement: React.FC = () => {
                 <DataTable.Title style={styles.productColumn}>Product</DataTable.Title>
                 <DataTable.Title style={styles.categoryColumn}>Category</DataTable.Title>
                 <DataTable.Title numeric style={styles.priceColumn}>Price</DataTable.Title>
-                <DataTable.Title style={styles.statusColumn}>Status</DataTable.Title>
+                <DataTable.Title style={styles.statusColumn}>Full Stock</DataTable.Title>
                 <DataTable.Title style={styles.actionsColumn}>Actions</DataTable.Title>
               </DataTable.Header>
 
               {filteredProducts.map((product) => (
                 <DataTable.Row key={product.id}>
                   <DataTable.Cell style={styles.productColumn}>
-                    <Text variant="bodyMedium" numberOfLines={1}>
-                      {product.title}
-                    </Text>
+                    <View>
+                      <Text variant="bodyMedium" numberOfLines={1}>
+                        {product.title}
+                      </Text>
+                    </View>
                   </DataTable.Cell>
                   <DataTable.Cell style={styles.categoryColumn}>
                     <Text variant="bodyMedium" numberOfLines={1}>
@@ -699,7 +741,7 @@ const ProductManagement: React.FC = () => {
                   </DataTable.Cell>
                   <DataTable.Cell style={styles.statusColumn}>
                     <Chip mode="outlined" style={product.active ? styles.activeChip : styles.inactiveChip}>
-                      {product.active ? 'Active' : 'Inactive'}
+                      {product.fullstock ? 'Yes' : 'NO'}
                     </Chip>
                   </DataTable.Cell>
                   <DataTable.Cell style={styles.actionsColumn}>
@@ -758,6 +800,11 @@ const ProductManagement: React.FC = () => {
                             <Text variant="bodyMedium" numberOfLines={2} style={styles.productTitle}>
                               {product.title}
                             </Text>
+                            {product.fullstock && (
+                              <Chip mode="outlined" style={styles.fullstockChip} compact>
+                                Fullstock
+                              </Chip>
+                            )}
                             <Text variant="bodySmall" style={styles.productPrice}>
                               ₹{product.sellingPrice}
                             </Text>
@@ -889,6 +936,25 @@ const ProductManagement: React.FC = () => {
               keyboardType="decimal-pad"
               left={<TextInput.Affix text="₹" />}
             />
+
+            {/* Fullstock Toggle */}
+            <View style={styles.fullstockToggle}>
+              <View style={styles.fullstockRow}>
+                <Text variant="bodyMedium" style={styles.fullstockLabel}>
+                  Fullstock Product
+                </Text>
+                <Switch
+                  value={fullstock}
+                  onValueChange={handleFullstockToggle}
+                  color="#4CAF50"
+                />
+              </View>
+              <Text variant="bodySmall" style={styles.fullstockDescription}>
+                {fullstock 
+                  ? 'Stock and production fields are hidden. All variants will have stock: 1 and production: 1. Orders will not reduce stock.'
+                  : 'Stock and production fields are visible. Orders will reduce stock normally.'}
+              </Text>
+            </View>
 
             <Button mode="outlined" onPress={pickImage} loading={uploading} style={styles.input} icon="image">
               <Text>Add Image</Text>
@@ -1204,6 +1270,35 @@ const styles = StyleSheet.create({
   },
   input: {
     marginBottom: scaleSize(16),
+  },
+  // Fullstock styles
+  fullstockToggle: {
+    marginBottom: scaleSize(16),
+    padding: scaleSize(12),
+    backgroundColor: '#F8F9FA',
+    borderRadius: scaleSize(8),
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  fullstockRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: scaleSize(8),
+  },
+  fullstockLabel: {
+    color: '#3B3B3B',
+    fontWeight: '600',
+  },
+  fullstockDescription: {
+    color: '#666',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  fullstockChip: {
+    backgroundColor: '#E8F5E8',
+    borderColor: '#4CAF50',
+    marginTop: scaleSize(4),
   },
   customDropdownButton: {
     flexDirection: 'row',
