@@ -272,7 +272,7 @@ const OrderManagement: React.FC = () => {
         const deliveredQty = i.deliveredQuantity || 0;
         const remainingQty = i.quantity - deliveredQty;
         return `<tr>
-          <td><strong>${i.productName ?? 'N/A'}</strong><div class="product-id">${(i.productId ?? 'N/A').toString().substring(0,8)}</div></td>
+          <td><strong>${i.productName ?? 'N/A'}</strong></td>
           <td>${i.size ?? '-'}</td>
           <td>${i.quantity ?? 0}</td>
           <td>
@@ -707,7 +707,7 @@ const OrderManagement: React.FC = () => {
                       <DataTable.Row key={index} style={styles.tableRow}>
                         <DataTable.Cell style={styles.tableCell}>
                           <Text variant="bodySmall" style={styles.skuText}>
-                            {(item.productId ?? "").toString().substring(0, 8)}
+                            {(item.productName ?? "")}
                           </Text>
                         </DataTable.Cell>
 
@@ -979,8 +979,8 @@ const styles = StyleSheet.create({
   },
   skuText: {
     fontFamily: "monospace",
-    fontSize: 10,
-    color: "#666",
+    fontSize: 15,
+    color: "#000",
   },
   deliveredText: {
     color: "#4CAF50",

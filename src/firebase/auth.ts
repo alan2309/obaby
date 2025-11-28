@@ -16,7 +16,7 @@ export interface UserData {
   name: string;
   phone: string;
   city: string; // Added city field
-  role: 'admin' | 'salesman' | 'customer';
+  role: 'admin' | 'salesman' | 'customer'|'worker';
   approved: boolean;
   createdAt: Date;
   maxDiscountPercent?: number;
