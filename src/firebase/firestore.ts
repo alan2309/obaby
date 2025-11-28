@@ -28,6 +28,7 @@ export interface ProductVariant {
   size: string;
   color: string;
   stock: number;
+  production: number;
 }
 
 export interface Category {
@@ -213,7 +214,12 @@ export const getProducts = async (includeInactive = false): Promise<Product[]> =
         categoryId: data.categoryId || '',
         sellingPrice: data.sellingPrice || 0,
         images: data.images || [],
-        sizes: data.sizes || [],
+        sizes: data.sizes?.map((variant: any) => ({
+          size: variant.size || '',
+          color: variant.color || 'Default',
+          stock: variant.stock || 0,
+          production: variant.production || 0, // Add this line
+        })) || [],
         active: data.active !== undefined ? data.active : true,
         createdAt: data.createdAt?.toDate() || new Date(),
       } as Product;
@@ -252,10 +258,17 @@ export const getProduct = async (productId: string): Promise<Product | null> => 
   try {
     const docSnap = await getDoc(doc(firestore, COLLECTIONS.PRODUCTS, productId));
     if (docSnap.exists()) {
+      const data = docSnap.data();
       return {
         id: docSnap.id,
-        ...docSnap.data(),
-        createdAt: docSnap.data().createdAt.toDate(),
+        ...data,
+        sizes: data.sizes?.map((variant: any) => ({
+          size: variant.size || '',
+          color: variant.color || 'Default',
+          stock: variant.stock || 0,
+          production: variant.production || 0, // Add this line
+        })) || [],
+        createdAt: data.createdAt.toDate(),
       } as Product;
     }
     return null;
@@ -484,7 +497,12 @@ export const getProductsByCategory = async (categoryId: string, includeInactive 
         costPrice: data.costPrice || 0,
         sellingPrice: data.sellingPrice || 0,
         images: data.images || [],
-        sizes: data.sizes || [],
+        sizes: data.sizes?.map((variant: any) => ({
+          size: variant.size || '',
+          color: variant.color || 'Default',
+          stock: variant.stock || 0,
+          production: variant.production || 0, // Add this line
+        })) || [],
         active: data.active !== undefined ? data.active : true,
         createdAt: data.createdAt?.toDate() || new Date(),
       } as Product;

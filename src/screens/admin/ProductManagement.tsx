@@ -7,6 +7,7 @@ import {
   Image,
   TouchableOpacity,
   Modal as RNModal,
+  Dimensions,
 } from 'react-native';
 import {
   Text,
@@ -37,6 +38,9 @@ import {
 } from '../../firebase/firestore';
 import { scaleSize, platformStyle, isTablet } from '../../utils/constants';
 
+const { width: screenWidth } = Dimensions.get('window');
+const isMobile = screenWidth < 768;
+
 const ProductManagement: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -48,7 +52,7 @@ const ProductManagement: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Form state - added sellingPrice back
+  // Form state
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -75,6 +79,7 @@ const ProductManagement: React.FC = () => {
         size,
         color: 'Default',
         stock: 1,
+        production: 1,
       }));
       setVariants(standardVariants);
     }
@@ -105,8 +110,8 @@ const ProductManagement: React.FC = () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false, // Changed to false to prevent cropping
-        aspect: undefined, // Removed fixed aspect ratio
+        allowsEditing: false,
+        aspect: undefined,
         quality: 0.8,
       });
 
@@ -120,7 +125,7 @@ const ProductManagement: React.FC = () => {
 
   // Add a single variant
   const addVariant = () => {
-    setVariants([...variants, { size: '', color: 'Default', stock: 1 }]);
+    setVariants([...variants, { size: '', color: 'Default', stock: 1, production: 1 }]);
   };
 
   const updateVariant = (
@@ -159,6 +164,28 @@ const ProductManagement: React.FC = () => {
     }
   };
 
+  // Production management functions
+  const increaseProduction = (index: number) => {
+    const updatedVariants = [...variants];
+    updatedVariants[index].production += 1;
+    setVariants(updatedVariants);
+  };
+
+  const decreaseProduction = (index: number) => {
+    const updatedVariants = [...variants];
+    if (updatedVariants[index].production > 0) {
+      updatedVariants[index].production -= 1;
+      setVariants(updatedVariants);
+    }
+  };
+
+  const handleProductionChange = (index: number, value: string) => {
+    const numericValue = parseInt(value) || 0;
+    if (numericValue >= 0) {
+      updateVariant(index, 'production', numericValue);
+    }
+  };
+
   const clearAllVariants = () => {
     Alert.alert('Clear All Variants', 'Are you sure you want to remove all variants?', [
       { text: 'Cancel', style: 'cancel' },
@@ -175,13 +202,13 @@ const ProductManagement: React.FC = () => {
       size,
       color: 'Default',
       stock: 1,
+      production: 1,
     }));
     setVariants(standardVariants);
     Alert.alert('Success', 'Reset to standard sizes');
   };
 
   const handleSubmit = async () => {
-    // Updated validation - added sellingPrice validation
     if (!title || !categoryId || !sellingPrice) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -190,7 +217,6 @@ const ProductManagement: React.FC = () => {
     try {
       setLoading(true);
 
-      // Show upload progress if there are local images
       const localImages = images.filter(
         (uri) => uri && (uri.startsWith('file://') || uri.startsWith('data:'))
       );
@@ -199,14 +225,13 @@ const ProductManagement: React.FC = () => {
         Alert.alert('Uploading', `Uploading ${localImages.length} images...`);
       }
 
-      // Updated product data - added sellingPrice back
       const productData = {
         title,
-        description: '', // Keep empty description for compatibility
+        description: '',
         category,
         categoryId,
-        costPrice: 0, // Set default value
-        sellingPrice: parseFloat(sellingPrice), // Added selling price back
+        costPrice: 0,
+        sellingPrice: parseFloat(sellingPrice),
         images,
         sizes: variants,
         active: true,
@@ -221,7 +246,6 @@ const ProductManagement: React.FC = () => {
         await addProduct(productData);
       }
 
-      // Check if there were any local images that might have failed to upload
       if (localImages.length > 0) {
         successMessage += '. Some images may not have uploaded correctly.';
       }
@@ -332,7 +356,6 @@ const ProductManagement: React.FC = () => {
   };
 
   const handleDeleteCategory = async (category: Category) => {
-    // Check if any products are using this category
     const productsInCategory = products.filter((p) => p.categoryId === category.id);
 
     if (productsInCategory.length > 0) {
@@ -363,6 +386,232 @@ const ProductManagement: React.FC = () => {
   };
 
   const [viewMode, setViewMode] = useState<'list' | 'category'>('list');
+
+  // Responsive table component for mobile
+  const MobileProductRow = ({ product }: { product: Product }) => (
+    <Card style={styles.mobileCard}>
+      <Card.Content>
+        <View style={styles.mobileRow}>
+          <View style={styles.mobileProductInfo}>
+            <Text variant="bodyLarge" style={styles.mobileProductTitle}>
+              {product.title}
+            </Text>
+            <Text variant="bodyMedium" style={styles.mobileCategory}>
+              {getCategoryName(product.categoryId)}
+            </Text>
+            <Text variant="bodyMedium" style={styles.mobilePrice}>
+              ₹{product.sellingPrice}
+            </Text>
+          </View>
+          <View style={styles.mobileStatusActions}>
+            <Chip 
+              mode="outlined" 
+              style={product.active ? styles.activeChip : styles.inactiveChip}
+              compact
+            >
+              {product.active ? 'Active' : 'Inactive'}
+            </Chip>
+            <View style={styles.mobileActionButtons}>
+              <Button 
+                mode="text" 
+                compact 
+                onPress={() => editProduct(product)}
+                textColor="#1976D2"
+                style={styles.mobileActionButton}
+              >
+                Edit
+              </Button>
+              <Button 
+                mode="text" 
+                compact 
+                onPress={() => handleDelete(product)} 
+                textColor="#D32F2F"
+                style={styles.mobileActionButton}
+              >
+                Delete
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Card.Content>
+    </Card>
+  );
+
+  // Mobile Variant Row Component
+  const MobileVariantRow = ({ variant, index }: { variant: ProductVariant; index: number }) => (
+    <Card style={styles.variantCard}>
+      <Card.Content>
+        <View style={styles.mobileVariantHeader}>
+          <TextInput
+            label="Size"
+            value={variant.size}
+            onChangeText={(value) => updateVariant(index, 'size', value)}
+            style={styles.mobileSizeInput}
+            mode="outlined"
+            placeholder="S, M, L..."
+          />
+          <IconButton 
+            icon="delete" 
+            onPress={() => removeVariant(index)} 
+            iconColor="red" 
+            size={20}
+          />
+        </View>
+        
+        <View style={styles.mobileControlsRow}>
+          {/* Stock Controls */}
+          <View style={styles.mobileControlGroup}>
+            <Text variant="bodySmall" style={styles.mobileControlLabel}>
+              Stock
+            </Text>
+            <View style={styles.mobileNumberControls}>
+              <IconButton 
+                icon="minus" 
+                size={18}
+                onPress={() => decreaseStock(index)}
+                disabled={variant.stock <= 0}
+                iconColor={variant.stock <= 0 ? '#ccc' : '#D32F2F'}
+                style={styles.mobileIconButton}
+              />
+              <TextInput
+                value={variant.stock.toString()}
+                onChangeText={(value) => handleStockChange(index, value)}
+                style={styles.mobileNumberInput}
+                mode="outlined"
+                keyboardType="numeric"
+                dense
+              />
+              <IconButton 
+                icon="plus" 
+                size={18}
+                onPress={() => increaseStock(index)}
+                iconColor="#4CAF50"
+                style={styles.mobileIconButton}
+              />
+            </View>
+          </View>
+
+          {/* Production Controls */}
+          <View style={styles.mobileControlGroup}>
+            <Text variant="bodySmall" style={styles.mobileControlLabel}>
+              Production
+            </Text>
+            <View style={styles.mobileNumberControls}>
+              <IconButton 
+                icon="minus" 
+                size={18}
+                onPress={() => decreaseProduction(index)}
+                disabled={variant.production <= 0}
+                iconColor={variant.production <= 0 ? '#ccc' : '#D32F2F'}
+                style={styles.mobileIconButton}
+              />
+              <TextInput
+                value={variant.production.toString()}
+                onChangeText={(value) => handleProductionChange(index, value)}
+                style={styles.mobileNumberInput}
+                mode="outlined"
+                keyboardType="numeric"
+                dense
+              />
+              <IconButton 
+                icon="plus" 
+                size={18}
+                onPress={() => increaseProduction(index)}
+                iconColor="#4CAF50"
+                style={styles.mobileIconButton}
+              />
+            </View>
+          </View>
+        </View>
+      </Card.Content>
+    </Card>
+  );
+
+  // Desktop Variant Row Component
+  const DesktopVariantRow = ({ variant, index }: { variant: ProductVariant; index: number }) => (
+    <Card style={styles.variantCard}>
+      <Card.Content>
+        <View style={styles.desktopVariantRow}>
+          {/* Size Input */}
+          <TextInput
+            label="Size"
+            value={variant.size}
+            onChangeText={(value) => updateVariant(index, 'size', value)}
+            style={styles.desktopSizeInput}
+            mode="outlined"
+            placeholder="S, M, L..."
+          />
+          
+          {/* Stock Controls */}
+          <View style={styles.desktopControlGroup}>
+            <Text variant="bodySmall" style={styles.desktopControlLabel}>
+              Stock
+            </Text>
+            <View style={styles.desktopNumberControls}>
+              <IconButton 
+                icon="minus" 
+                size={18}
+                onPress={() => decreaseStock(index)}
+                disabled={variant.stock <= 0}
+                iconColor={variant.stock <= 0 ? '#ccc' : '#D32F2F'}
+              />
+              <TextInput
+                value={variant.stock.toString()}
+                onChangeText={(value) => handleStockChange(index, value)}
+                style={styles.desktopNumberInput}
+                mode="outlined"
+                keyboardType="numeric"
+                dense
+              />
+              <IconButton 
+                icon="plus" 
+                size={18}
+                onPress={() => increaseStock(index)}
+                iconColor="#4CAF50"
+              />
+            </View>
+          </View>
+
+          {/* Production Controls */}
+          <View style={styles.desktopControlGroup}>
+            <Text variant="bodySmall" style={styles.desktopControlLabel}>
+              Production
+            </Text>
+            <View style={styles.desktopNumberControls}>
+              <IconButton 
+                icon="minus" 
+                size={18}
+                onPress={() => decreaseProduction(index)}
+                disabled={variant.production <= 0}
+                iconColor={variant.production <= 0 ? '#ccc' : '#D32F2F'}
+              />
+              <TextInput
+                value={variant.production.toString()}
+                onChangeText={(value) => handleProductionChange(index, value)}
+                style={styles.desktopNumberInput}
+                mode="outlined"
+                keyboardType="numeric"
+                dense
+              />
+              <IconButton 
+                icon="plus" 
+                size={18}
+                onPress={() => increaseProduction(index)}
+                iconColor="#4CAF50"
+              />
+            </View>
+          </View>
+
+          <IconButton 
+            icon="delete" 
+            onPress={() => removeVariant(index)} 
+            iconColor="red" 
+            size={20}
+          />
+        </View>
+      </Card.Content>
+    </Card>
+  );
 
   return (
     <View style={styles.container}>
@@ -413,116 +662,126 @@ const ProductManagement: React.FC = () => {
           </ScrollView>
         </View>
 
-       {viewMode === 'list' ? (
-  // List View - Added Price column back with proper spacing
-  <DataTable>
-    <DataTable.Header>
-      <DataTable.Title style={styles.productColumn}>Product</DataTable.Title>
-      <DataTable.Title style={styles.categoryColumn}>Category</DataTable.Title>
-      <DataTable.Title numeric style={styles.priceColumn}>Price</DataTable.Title>
-      <DataTable.Title style={styles.statusColumn}>Status</DataTable.Title>
-      <DataTable.Title style={styles.actionsColumn}>Actions</DataTable.Title>
-    </DataTable.Header>
+        {viewMode === 'list' ? (
+          // Responsive table - mobile cards vs desktop table
+          isMobile ? (
+            // Mobile view - cards
+            <View style={styles.mobileTable}>
+              {filteredProducts.map((product) => (
+                <MobileProductRow key={product.id} product={product} />
+              ))}
+            </View>
+          ) : (
+            // Desktop/Tablet view - DataTable
+            <DataTable style={styles.desktopTable}>
+              <DataTable.Header>
+                <DataTable.Title style={styles.productColumn}>Product</DataTable.Title>
+                <DataTable.Title style={styles.categoryColumn}>Category</DataTable.Title>
+                <DataTable.Title numeric style={styles.priceColumn}>Price</DataTable.Title>
+                <DataTable.Title style={styles.statusColumn}>Status</DataTable.Title>
+                <DataTable.Title style={styles.actionsColumn}>Actions</DataTable.Title>
+              </DataTable.Header>
 
-    {filteredProducts.map((product) => (
-      <DataTable.Row key={product.id}>
-        <DataTable.Cell style={styles.productColumn}>
-          <Text variant="bodyMedium" numberOfLines={1}>
-            {product.title}
-          </Text>
-        </DataTable.Cell>
-        <DataTable.Cell style={styles.categoryColumn}>
-          <Text variant="bodyMedium" numberOfLines={1}>
-            {getCategoryName(product.categoryId)}
-          </Text>
-        </DataTable.Cell>
-        <DataTable.Cell numeric style={styles.priceColumn}>
-          <Text variant="bodyMedium">₹{product.sellingPrice}</Text>
-        </DataTable.Cell>
-        <DataTable.Cell style={styles.statusColumn}>
-          <Chip mode="outlined" style={product.active ? styles.activeChip : styles.inactiveChip}>
-            {product.active ? 'Active' : 'Inactive'}
-          </Chip>
-        </DataTable.Cell>
-        <DataTable.Cell style={styles.actionsColumn}>
-          <View style={styles.actionButtons}>
-            <Button 
-              mode="text" 
-              compact 
-              onPress={() => editProduct(product)}
-              textColor="#1976D2"
-              style={styles.editButton}
-            >
-              Edit
-            </Button>
-            <Button 
-              mode="text" 
-              compact 
-              onPress={() => handleDelete(product)} 
-              textColor="#D32F2F"
-              style={styles.deleteButton}
-            >
-              Delete
-            </Button>
-          </View>
-        </DataTable.Cell>
-      </DataTable.Row>
-    ))}
-  </DataTable>
-) : (
-  // Category View - Added price display back
-  <View style={styles.categoryView}>
-    {Object.entries(productsByCategory).map(([categoryName, categoryProducts]) => (
-      <Card key={categoryName} style={styles.categoryCard}>
-        <Card.Content>
-          <View style={styles.categoryHeader}>
-            <Text variant="titleMedium" style={styles.categoryTitle}>
-              {categoryName}
-            </Text>
-            <Text variant="bodySmall" style={styles.productCount}>
-              {categoryProducts.length} products
-            </Text>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.categoryProducts}>
-              {categoryProducts.map((product) => (
-                <Card key={product.id} style={styles.productCard}>
-                  <Card.Content style={styles.productCardContent}>
-                    {product.images && product.images.length > 0 && (
-                      <Image 
-                        source={{ uri: product.images[0] }} 
-                        style={styles.productImage} 
-                        resizeMode="contain"
-                      />
-                    )}
-                    <Text variant="bodyMedium" numberOfLines={2} style={styles.productTitle}>
+              {filteredProducts.map((product) => (
+                <DataTable.Row key={product.id}>
+                  <DataTable.Cell style={styles.productColumn}>
+                    <Text variant="bodyMedium" numberOfLines={1}>
                       {product.title}
                     </Text>
-                    <Text variant="bodySmall" style={styles.productPrice}>
-                      ₹{product.sellingPrice}
+                  </DataTable.Cell>
+                  <DataTable.Cell style={styles.categoryColumn}>
+                    <Text variant="bodyMedium" numberOfLines={1}>
+                      {getCategoryName(product.categoryId)}
                     </Text>
-                    <View style={styles.productActions}>
+                  </DataTable.Cell>
+                  <DataTable.Cell numeric style={styles.priceColumn}>
+                    <Text variant="bodyMedium">₹{product.sellingPrice}</Text>
+                  </DataTable.Cell>
+                  <DataTable.Cell style={styles.statusColumn}>
+                    <Chip mode="outlined" style={product.active ? styles.activeChip : styles.inactiveChip}>
+                      {product.active ? 'Active' : 'Inactive'}
+                    </Chip>
+                  </DataTable.Cell>
+                  <DataTable.Cell style={styles.actionsColumn}>
+                    <View style={styles.actionButtons}>
                       <Button 
                         mode="text" 
                         compact 
-                        onPress={() => editProduct(product)} 
-                        style={styles.smallButton}
+                        onPress={() => editProduct(product)}
                         textColor="#1976D2"
+                        style={styles.editButton}
                       >
                         Edit
                       </Button>
+                      <Button 
+                        mode="text" 
+                        compact 
+                        onPress={() => handleDelete(product)} 
+                        textColor="#D32F2F"
+                        style={styles.deleteButton}
+                      >
+                        Delete
+                      </Button>
                     </View>
-                  </Card.Content>
-                </Card>
+                  </DataTable.Cell>
+                </DataTable.Row>
               ))}
-            </View>
-          </ScrollView>
-        </Card.Content>
-      </Card>
-    ))}
-  </View>
-)}
+            </DataTable>
+          )
+        ) : (
+          // Category View
+          <View style={styles.categoryView}>
+            {Object.entries(productsByCategory).map(([categoryName, categoryProducts]) => (
+              <Card key={categoryName} style={styles.categoryCard}>
+                <Card.Content>
+                  <View style={styles.categoryHeader}>
+                    <Text variant="titleMedium" style={styles.categoryTitle}>
+                      {categoryName}
+                    </Text>
+                    <Text variant="bodySmall" style={styles.productCount}>
+                      {categoryProducts.length} products
+                    </Text>
+                  </View>
+
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={styles.categoryProducts}>
+                      {categoryProducts.map((product) => (
+                        <Card key={product.id} style={styles.productCard}>
+                          <Card.Content style={styles.productCardContent}>
+                            {product.images && product.images.length > 0 && (
+                              <Image 
+                                source={{ uri: product.images[0] }} 
+                                style={styles.productImage} 
+                                resizeMode="contain"
+                              />
+                            )}
+                            <Text variant="bodyMedium" numberOfLines={2} style={styles.productTitle}>
+                              {product.title}
+                            </Text>
+                            <Text variant="bodySmall" style={styles.productPrice}>
+                              ₹{product.sellingPrice}
+                            </Text>
+                            <View style={styles.productActions}>
+                              <Button 
+                                mode="text" 
+                                compact 
+                                onPress={() => editProduct(product)} 
+                                style={styles.smallButton}
+                                textColor="#1976D2"
+                              >
+                                Edit
+                              </Button>
+                            </View>
+                          </Card.Content>
+                        </Card>
+                      ))}
+                    </View>
+                  </ScrollView>
+                </Card.Content>
+              </Card>
+            ))}
+          </View>
+        )}
 
         {filteredProducts.length === 0 && !loading && (
           <Card style={styles.emptyCard}>
@@ -543,10 +802,9 @@ const ProductManagement: React.FC = () => {
             setModalVisible(false);
             resetForm();
           }}
-          contentContainerStyle={styles.modal}
+          contentContainerStyle={[styles.modal, isMobile && styles.mobileModal]}
         >
           <ScrollView>
-            {/* Close Button on Top */}
             <View style={styles.modalHeader}>
               <Text variant="headlineSmall" style={styles.modalTitle}>
                 {editingProduct ? 'Edit Product' : 'Add New Product'}
@@ -562,7 +820,7 @@ const ProductManagement: React.FC = () => {
               />
             </View>
 
-            <TextInput label="Product SKU *" value={title} onChangeText={setTitle} style={styles.input} mode="outlined" />
+            <TextInput label="Product Title *" value={title} onChangeText={setTitle} style={styles.input} mode="outlined" />
 
             {/* Category Selection */}
             <View style={styles.input}>
@@ -578,7 +836,6 @@ const ProductManagement: React.FC = () => {
                 <IconButton icon={showCategoryDropdown ? 'chevron-up' : 'chevron-down'} size={20} iconColor="#666" />
               </TouchableOpacity>
 
-              {/* Separate Modal for Dropdown */}
               <RNModal
                 visible={showCategoryDropdown}
                 transparent={true}
@@ -622,7 +879,7 @@ const ProductManagement: React.FC = () => {
               {categoryId ? <Text variant="bodySmall" style={styles.selectedCategory}>Selected: {category}</Text> : null}
             </View>
 
-            {/* Selling Price Input - Added back */}
+            {/* Selling Price Input */}
             <TextInput
               label="Selling Price *"
               value={sellingPrice}
@@ -654,7 +911,7 @@ const ProductManagement: React.FC = () => {
               <Text variant="titleMedium" style={styles.sectionTitle}>
                 Variants ({variants.length})
               </Text>
-              <View style={styles.variantHeaderActions}>
+              <View style={[styles.variantHeaderActions, isMobile && styles.mobileVariantHeaderActions]}>
                 {variants.length > 0 && (
                   <Button
                     mode="outlined"
@@ -665,11 +922,10 @@ const ProductManagement: React.FC = () => {
                   >
                     <Text>Clear All</Text>
                   </Button>
-                  
                 )}
                 <Button mode="outlined" onPress={resetToStandardSizes} style={styles.variantButton} icon="refresh">
-                <Text>Reset</Text>
-              </Button>
+                  <Text>Reset</Text>
+                </Button>
               </View>
             </View>
 
@@ -683,61 +939,25 @@ const ProductManagement: React.FC = () => {
               </Card>
             )}
 
+            {/* Variants List - Responsive */}
             {variants.map((variant, index) => (
-              <Card key={index} style={styles.variantCard}>
-                <Card.Content>
-                  <View style={styles.variantRow}>
-                    <TextInput
-                      label="Size"
-                      value={variant.size}
-                      onChangeText={(value) => updateVariant(index, 'size', value)}
-                      style={styles.variantInput}
-                      mode="outlined"
-                      placeholder="e.g., S, M, L, XL..."
-                    />
-                    <View style={styles.stockContainer}>
-                      <Text variant="bodyMedium" style={styles.stockLabel}>
-                        Stock
-                      </Text>
-                      <View style={styles.stockControls}>
-                        <IconButton 
-                          icon="minus" 
-                          size={20} 
-                          onPress={() => decreaseStock(index)}
-                          disabled={variant.stock <= 0}
-                          iconColor={variant.stock <= 0 ? '#ccc' : '#D32F2F'}
-                        />
-                        <TextInput
-                          value={variant.stock.toString()}
-                          onChangeText={(value) => handleStockChange(index, value)}
-                          style={styles.stockInput}
-                          mode="outlined"
-                          keyboardType="numeric"
-                        />
-                        <IconButton 
-                          icon="plus" 
-                          size={20} 
-                          onPress={() => increaseStock(index)}
-                          iconColor="#4CAF50"
-                        />
-                      </View>
-                    </View>
-                    <IconButton icon="delete" onPress={() => removeVariant(index)} iconColor="red" size={20} />
-                  </View>
-                </Card.Content>
-              </Card>
+              isMobile ? (
+                <MobileVariantRow key={index} variant={variant} index={index} />
+              ) : (
+                <DesktopVariantRow key={index} variant={variant} index={index} />
+              )
             ))}
 
             <View style={styles.variantButtons}>
               <Button
-                  mode="outlined"
-                  onPress={addVariant}
-                  style={[styles.smallButton, styles.addVariantButton]}
-                  compact
-                  icon="plus"
-                >
-                  <Text>Add Variant</Text>
-                </Button>
+                mode="outlined"
+                onPress={addVariant}
+                style={[styles.smallButton, styles.addVariantButton]}
+                compact
+                icon="plus"
+              >
+                <Text>Add Variant</Text>
+              </Button>
             </View>
 
             <Button mode="contained" onPress={handleSubmit} loading={loading} disabled={loading} style={styles.submitButton}>
@@ -747,9 +967,8 @@ const ProductManagement: React.FC = () => {
         </Modal>
 
         {/* Category Management Modal */}
-        <Modal visible={categoryModalVisible} onDismiss={() => setCategoryModalVisible(false)} contentContainerStyle={styles.modal}>
+        <Modal visible={categoryModalVisible} onDismiss={() => setCategoryModalVisible(false)} contentContainerStyle={[styles.modal, isMobile && styles.mobileModal]}>
           <ScrollView>
-            {/* Close Button on Top */}
             <View style={styles.modalHeader}>
               <Text variant="headlineSmall" style={styles.modalTitle}>
                 Manage Categories
@@ -757,7 +976,6 @@ const ProductManagement: React.FC = () => {
               <IconButton icon="close" size={24} onPress={() => setCategoryModalVisible(false)} style={styles.closeIcon} />
             </View>
 
-            {/* Add Category Form */}
             <View style={styles.input}>
               <Text variant="bodyMedium" style={styles.label}>
                 Add New Category
@@ -770,7 +988,6 @@ const ProductManagement: React.FC = () => {
               </View>
             </View>
 
-            {/* Categories List */}
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Existing Categories
             </Text>
@@ -799,7 +1016,6 @@ const ProductManagement: React.FC = () => {
 
       {/* Floating Action Buttons */}
       <FAB icon="plus" style={styles.fab} onPress={() => setModalVisible(true)} />
-
       <FAB icon="folder" style={[styles.fab, styles.categoryFab]} onPress={() => setCategoryModalVisible(true)} small />
     </View>
   );
@@ -838,6 +1054,76 @@ const styles = StyleSheet.create({
   categoryChip: {
     marginRight: scaleSize(8),
   },
+  
+  // Mobile Table Styles
+  mobileTable: {
+    gap: scaleSize(8),
+  },
+  mobileCard: {
+    backgroundColor: 'white',
+    marginBottom: scaleSize(8),
+  },
+  mobileRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  mobileProductInfo: {
+    flex: 1,
+    marginRight: scaleSize(8),
+  },
+  mobileProductTitle: {
+    fontWeight: '600',
+    marginBottom: scaleSize(4),
+  },
+  mobileCategory: {
+    color: '#666',
+    marginBottom: scaleSize(2),
+  },
+  mobilePrice: {
+    color: '#E6C76E',
+    fontWeight: '600',
+  },
+  mobileStatusActions: {
+    alignItems: 'flex-end',
+    minWidth: 100,
+  },
+  mobileActionButtons: {
+    flexDirection: 'row',
+    marginTop: scaleSize(8),
+  },
+  mobileActionButton: {
+    minWidth: 50,
+    marginLeft: scaleSize(4),
+  },
+  
+  // Desktop Table Styles
+  desktopTable: {
+    flex: 1,
+  },
+  productColumn: {
+    flex: 2,
+    justifyContent: 'center',
+  },
+  categoryColumn: {
+    flex: 1.5,
+    justifyContent: 'center',
+  },
+  priceColumn: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: scaleSize(8),
+  },
+  statusColumn: {
+    flex: 1.2,
+    justifyContent: 'center',
+    paddingLeft: scaleSize(12),
+  },
+  actionsColumn: {
+    flex: 1.5,
+    justifyContent: 'center',
+  },
+  
   categoryView: {
     gap: scaleSize(16),
   },
@@ -895,7 +1181,12 @@ const styles = StyleSheet.create({
     margin: scaleSize(20),
     padding: scaleSize(20),
     borderRadius: scaleSize(8),
-    maxHeight: '100%',
+    maxHeight: '90%',
+  },
+  mobileModal: {
+    margin: scaleSize(10),
+    padding: scaleSize(15),
+    maxHeight: '95%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -914,10 +1205,6 @@ const styles = StyleSheet.create({
   input: {
     marginBottom: scaleSize(16),
   },
-  halfInput: {
-    flex: 1,
-    marginHorizontal: scaleSize(4),
-  },
   customDropdownButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -934,7 +1221,6 @@ const styles = StyleSheet.create({
     color: '#3B3B3B',
     flex: 1,
   },
-  // New dropdown modal styles
   dropdownOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -974,10 +1260,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
   },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
   imageScroll: {
     marginBottom: scaleSize(16),
   },
@@ -1001,6 +1283,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: scaleSize(8),
   },
+  mobileVariantHeaderActions: {
+    flexDirection: 'column',
+    gap: scaleSize(4),
+  },
   addVariantButton: {
     borderColor: '#4CAF50',
   },
@@ -1010,32 +1296,79 @@ const styles = StyleSheet.create({
   variantCard: {
     marginBottom: scaleSize(8),
   },
-  variantRow: {
+  
+  // Desktop Variant Styles
+  desktopVariantRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: scaleSize(8),
+    gap: scaleSize(12),
   },
-  variantInput: {
-    flex: 0.5,
+  desktopSizeInput: {
+    flex: 0.8,
+    minWidth: 80,
   },
-  // Stock management styles
-  stockContainer: {
+  desktopControlGroup: {
     flex: 1,
   },
-  stockLabel: {
+  desktopControlLabel: {
     marginBottom: scaleSize(4),
     color: '#3B3B3B',
     fontSize: 12,
-  },
-  stockControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scaleSize(4),
-  },
-  stockInput: {
-    flex: 1,
     textAlign: 'center',
   },
+  desktopNumberControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scaleSize(4),
+  },
+  desktopNumberInput: {
+    width: 60,
+    textAlign: 'center',
+  },
+  
+  // Mobile Variant Styles
+  mobileVariantHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: scaleSize(12),
+  },
+  mobileSizeInput: {
+    flex: 1,
+    marginRight: scaleSize(8),
+  },
+  mobileControlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: scaleSize(12),
+  },
+  mobileControlGroup: {
+    flex: 1,
+  },
+  mobileControlLabel: {
+    marginBottom: scaleSize(4),
+    color: '#3B3B3B',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  mobileNumberControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scaleSize(2),
+  },
+  mobileNumberInput: {
+    width: 50,
+    textAlign: 'center',
+    height: 40,
+  },
+  mobileIconButton: {
+    margin: 0,
+    width: 36,
+    height: 36,
+  },
+  
   variantButtons: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1124,29 +1457,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  // Table column styles for proper spacing
-  productColumn: {
-    flex: 2,
-    justifyContent: 'center',
-  },
-  categoryColumn: {
-    flex: 1.5,
-    justifyContent: 'center',
-  },
-  priceColumn: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: scaleSize(8),
-  },
-  statusColumn: {
-    flex: 1.2,
-    justifyContent: 'center',
-    paddingLeft: scaleSize(12),
-  },
-  actionsColumn: {
-    flex: 1.5,
-    justifyContent: 'center',
   },
 });
 
