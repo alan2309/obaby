@@ -36,7 +36,6 @@ import {
   deleteCategory,
 } from '../../firebase/firestore';
 import { scaleSize, platformStyle, isTablet } from '../../utils/constants';
-import { testCloudinaryConnection } from '../../firebase/cloudinary';
 
 const ProductManagement: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -67,16 +66,6 @@ const ProductManagement: React.FC = () => {
   useEffect(() => {
     loadProducts();
     loadCategories();
-  }, []);
-
-  useEffect(() => {
-    const testConnection = async () => {
-      const isConnected = await testCloudinaryConnection();
-      if (!isConnected) {
-        console.warn('⚠️ Cloudinary connection test failed');
-      }
-    };
-    testConnection();
   }, []);
 
   // Auto-fill standard sizes when modal opens for new product

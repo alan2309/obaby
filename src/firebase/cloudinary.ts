@@ -106,17 +106,3 @@ export const uploadMultipleToCloudinary = async (
   if (urls.length === 0) throw new Error("All uploads failed");
   return urls;
 };
-
-export const testCloudinaryConnection = async () => {
-  try {
-    const tinyBase64 =
-      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/l1zGyQAAAABJRU5ErkJggg==";
-
-    const url = await uploadToCloudinary(tinyBase64, "test");
-    console.log("✔ Cloudinary test OK:", url);
-    return true;
-  } catch {
-    console.log("⚠ Cloudinary test failed");
-    return false;
-  }
-};
