@@ -6,6 +6,7 @@ import {
   Alert,
   Image,
   TouchableOpacity,
+  Modal as RNModal,
 } from 'react-native';
 import {
   Text,
@@ -580,34 +581,54 @@ const ProductManagement: React.FC = () => {
                 Category *
               </Text>
 
-              <TouchableOpacity style={styles.customDropdownButton} onPress={() => setShowCategoryDropdown(!showCategoryDropdown)}>
+              <TouchableOpacity 
+                style={styles.customDropdownButton} 
+                onPress={() => setShowCategoryDropdown(!showCategoryDropdown)}
+              >
                 <Text style={styles.dropdownButtonText}>{category || 'Select Category'}</Text>
                 <IconButton icon={showCategoryDropdown ? 'chevron-up' : 'chevron-down'} size={20} iconColor="#666" />
               </TouchableOpacity>
 
-              {showCategoryDropdown && (
-                <View style={styles.dropdownWrapper}>
-                  <ScrollView style={styles.dropdownList} nestedScrollEnabled={true}>
-                    {categories.map((item) => (
-                      <TouchableOpacity
-                        key={item.id}
-                        style={styles.dropdownItem}
-                        onPress={() => {
-                          selectCategory(item);
-                          setShowCategoryDropdown(false);
-                        }}
+              {/* Separate Modal for Dropdown */}
+              <RNModal
+                visible={showCategoryDropdown}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowCategoryDropdown(false)}
+              >
+                <TouchableOpacity 
+                  style={styles.dropdownOverlay}
+                  activeOpacity={1}
+                  onPress={() => setShowCategoryDropdown(false)}
+                >
+                  <View style={styles.dropdownModalContainer}>
+                    <View style={styles.dropdownModalContent}>
+                      <ScrollView 
+                        style={styles.dropdownModalList}
+                        keyboardShouldPersistTaps="handled"
                       >
-                        <Text style={styles.dropdownItemText}>{item.title}</Text>
-                      </TouchableOpacity>
-                    ))}
-                    {categories.length === 0 && (
-                      <View style={styles.dropdownItem}>
-                        <Text style={styles.dropdownEmptyText}>No categories available</Text>
-                      </View>
-                    )}
-                  </ScrollView>
-                </View>
-              )}
+                        {categories.map((item) => (
+                          <TouchableOpacity
+                            key={item.id}
+                            style={styles.dropdownModalItem}
+                            onPress={() => {
+                              selectCategory(item);
+                              setShowCategoryDropdown(false);
+                            }}
+                          >
+                            <Text style={styles.dropdownModalItemText}>{item.title}</Text>
+                          </TouchableOpacity>
+                        ))}
+                        {categories.length === 0 && (
+                          <View style={styles.dropdownModalItem}>
+                            <Text style={styles.dropdownModalEmptyText}>No categories available</Text>
+                          </View>
+                        )}
+                      </ScrollView>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </RNModal>
 
               {categoryId ? <Text variant="bodySmall" style={styles.selectedCategory}>Selected: {category}</Text> : null}
             </View>
@@ -658,7 +679,7 @@ const ProductManagement: React.FC = () => {
                   
                 )}
                 <Button mode="outlined" onPress={resetToStandardSizes} style={styles.variantButton} icon="refresh">
-                <Text>Reset to Standard Sizes</Text>
+                <Text>Reset</Text>
               </Button>
               </View>
             </View>
@@ -919,46 +940,50 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: 'white',
   },
-  dropdownWrapper: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    zIndex: 1,
-    elevation: 5,
-  },
   dropdownButtonText: {
     fontSize: 16,
     color: '#3B3B3B',
     flex: 1,
   },
-  dropdownList: {
-    maxHeight: 200,
-    borderWidth: 1,
-    borderColor: '#79747E',
-    borderRadius: 4,
+  // New dropdown modal styles
+  dropdownOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dropdownModalContainer: {
+    width: '80%',
+    maxHeight: '60%',
+  },
+  dropdownModalContent: {
     backgroundColor: 'white',
-    marginTop: 4,
-    elevation: 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+    elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
-  dropdownItem: {
-    paddingHorizontal: 12,
+  dropdownModalList: {
+    maxHeight: 300,
+  },
+  dropdownModalItem: {
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  dropdownItemText: {
+  dropdownModalItemText: {
     fontSize: 16,
     color: '#3B3B3B',
   },
-  dropdownEmptyText: {
+  dropdownModalEmptyText: {
     fontSize: 14,
     color: '#999',
     fontStyle: 'italic',
+    textAlign: 'center',
   },
   priceRow: {
     flexDirection: 'row',
@@ -1002,7 +1027,7 @@ const styles = StyleSheet.create({
     gap: scaleSize(8),
   },
   variantInput: {
-    flex: 1,
+    flex: 0.5,
   },
   // Stock management styles
   stockContainer: {
