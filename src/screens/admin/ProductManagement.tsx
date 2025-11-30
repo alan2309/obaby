@@ -740,8 +740,8 @@ const editProduct = (product: Product) => {
                     <Text variant="bodyMedium">₹{product.sellingPrice}</Text>
                   </DataTable.Cell>
                   <DataTable.Cell style={styles.statusColumn}>
-                    <Chip mode="outlined" style={product.active ? styles.activeChip : styles.inactiveChip}>
-                      {product.fullstock ? 'Yes' : 'NO'}
+                    <Chip>
+                      {product.fullstock ? '✔️' : '❌'}
                     </Chip>
                   </DataTable.Cell>
                   <DataTable.Cell style={styles.actionsColumn}>

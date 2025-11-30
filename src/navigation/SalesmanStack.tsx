@@ -14,6 +14,7 @@ import OrderScreen from '../screens/salesman/OrderScreen';
 import CategoriesScreen from '../screens/common/CategoriesScreen';
 import CategoryProductsScreen from '../screens/salesman/CategoryProductsScreen';
 import CustomersScreen from '../screens/salesman/CustomersScreen';
+import WorkersScreen from '../screens/salesman/WorkersScreen';
 
 // Define types inline
 type SalesmanStackParamList = {
@@ -94,6 +95,15 @@ const ProfileWithRefresh = () => {
     />
   );
 };
+const WorkerWithRefresh = () => {
+  const [refreshKey, setRefreshKey] = useState(0);
+  
+  return (
+    <WorkersScreen 
+      key={refreshKey}
+    />
+  );
+};
 
 const SalesmanTabs = () => {
   return (
@@ -138,6 +148,20 @@ const SalesmanTabs = () => {
       <Tab.Screen 
         name="Customers" 
         component={CustomersWithRefresh}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="account-group" size={size} color={color} />
+          ),
+        }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            navigation.setParams({ refresh: Date.now() });
+          },
+        })}
+      />
+      <Tab.Screen 
+        name="Salesmen" 
+        component={WorkerWithRefresh}
         options={{
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="account-group" size={size} color={color} />

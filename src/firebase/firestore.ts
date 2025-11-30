@@ -69,9 +69,11 @@ export interface OrderItem {
 export interface Order {
   id?: string;
   customerId: string;
-  customerName: string; // Add this
+  customerName: string; 
   salesmanId: string;
-  salesmanName: string; // Add this
+  salesmanName: string; 
+    workerId: string; 
+  workerName: string; 
   items: OrderItem[];
   totalAmount: number;
   totalCost: number;
@@ -232,7 +234,7 @@ export const getProducts = async (includeInactive = false): Promise<Product[]> =
     }
 
     // Sort by createdAt descending
-    productsData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    productsData.sort((a, b) => a.category.localeCompare(b.category));
 
     // Save to offline cache and update sync time
     await saveProductsOffline(productsData);
@@ -371,11 +373,11 @@ export const checkStockAvailability = async (
 /**
  * Return products that have any variant stock at or below threshold (but > 0).
  */
-export const getLowStockProducts = async (threshold = 10): Promise<Product[]> => {
+export const getLowStockProducts = async (threshold = 3): Promise<Product[]> => {
   try {
     const products = await getProducts(true);
     return products.filter(product =>
-      product.sizes.some(variant => variant.stock <= threshold && variant.stock > 0)
+      product.sizes.some(variant => !product.fullstock&&variant.stock <= threshold && variant.stock > 0)
     );
   } catch (error) {
     throw new Error('Failed to fetch low stock products');
@@ -505,6 +507,7 @@ export const getProductsByCategory = async (categoryId: string, includeInactive 
           stock: variant.stock || 0,
           production: variant.production || 0, // Add this line
         })) || [],
+        fullstock: data.fullstock || false,
         active: data.active !== undefined ? data.active : true,
         createdAt: data.createdAt?.toDate() || new Date(),
       } as Product;
@@ -632,10 +635,11 @@ export const createOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updat
       };
     }
 
-    // Fetch customer and salesman names
-    const [customerData, salesmanData] = await Promise.all([
+    // Fetch customer, salesman, and worker names
+    const [customerData, salesmanData, workerData] = await Promise.all([
       getUser(order.customerId),
-      getUser(order.salesmanId)
+      getUser(order.salesmanId),
+      order.workerId ? getUser(order.workerId) : Promise.resolve(null)
     ]);
 
     if (!customerData) {
@@ -653,22 +657,29 @@ export const createOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updat
     }
 
     // All validations passed - create the order with names
-    const docRef = await addDoc(collection(firestore, COLLECTIONS.ORDERS), {
+    const orderData: any = {
       ...order,
       customerName: customerData.name || 'Unknown Customer',
       salesmanName: salesmanData.name || 'Unknown Salesman',
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
-    });
+    };
+
+    // Add worker information if provided
+    if (order.workerId && workerData) {
+      orderData.workerName = workerData.name || 'Unknown Worker';
+    }
+
+    const docRef = await addDoc(collection(firestore, COLLECTIONS.ORDERS), orderData);
 
     // Update stock after successful order creation
     for (const item of order.items) {
-  const product = await getProduct(item.productId);
-  if (product && !product.fullstock) {
-    // Only update stock if product is not marked as fullstock
-    await updateProductStock(item.productId, item.size, item.color, item.quantity);
-  }
-}
+      const product = await getProduct(item.productId);
+      if (product && !product.fullstock) {
+        // Only update stock if product is not marked as fullstock
+        await updateProductStock(item.productId, item.size, item.color, item.quantity);
+      }
+    }
 
     // Update salesman stats
     const totalDiscount = order.items.reduce((sum, item) => sum + (item.discountGiven * item.quantity), 0);
@@ -685,7 +696,7 @@ export const createOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updat
       message: `Failed to create order: ${error.message}`,
     };
   }
-};
+};;
 
 export const updateOrderPartialDelivery = async (
   orderId: string, 
@@ -836,9 +847,11 @@ export const getOrdersBySalesman = async (salesmanId: string): Promise<Order[]> 
       return {
         id: doc.id,
         customerId: data.customerId,
-        customerName: data.customerName || 'Unknown Customer', // Ensure name is included
+        customerName: data.customerName || 'Unknown Customer',
         salesmanId: data.salesmanId,
-        salesmanName: data.salesmanName || 'Unknown Salesman', // Ensure name is included
+        salesmanName: data.salesmanName || 'Unknown Salesman',
+        workerId: data.workerId || undefined,
+        workerName: data.workerName || undefined,
         items: data.items || [],
         totalAmount: data.totalAmount || 0,
         totalCost: data.totalCost || 0,
@@ -916,6 +929,50 @@ export const getAllOrders = async (): Promise<Order[]> => {
     throw new Error('Failed to fetch orders');
   }
 };
+/**
+ * Get orders for a specific worker (sorted by createdAt desc).
+ */
+export const getOrdersByWorker = async (workerId: string): Promise<Order[]> => {
+  try {
+    console.log('📦 Fetching orders for worker:', workerId);
+
+    const q = query(
+      collection(firestore, COLLECTIONS.ORDERS),
+      where('workerId', '==', workerId)
+    );
+
+    const querySnapshot = await getDocs(q);
+    const orders = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        customerId: data.customerId,
+        customerName: data.customerName || 'Unknown Customer',
+        salesmanId: data.salesmanId,
+        salesmanName: data.salesmanName || 'Unknown Salesman',
+        workerId: data.workerId,
+        workerName: data.workerName || 'Unknown Worker',
+        items: data.items || [],
+        totalAmount: data.totalAmount || 0,
+        totalCost: data.totalCost || 0,
+        totalProfit: data.totalProfit || 0,
+        status: data.status || 'Pending',
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+        deliveredAmount: data.deliveredAmount || 0,
+        deliveredProfit: data.deliveredProfit || 0,
+      } as Order;
+    });
+
+    orders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    console.log(`✅ Found ${orders.length} orders for worker`);
+    return orders;
+  } catch (error: any) {
+    console.error('❌ Error fetching orders by worker:', error);
+    throw new Error('Failed to fetch orders for worker');
+  }
+};
 
 /**
  * Update an order's status and update the updatedAt timestamp.
@@ -980,6 +1037,33 @@ export const getCustomersBySalesman = async (salesmanId: string): Promise<UserDa
     return customers;
   } catch (error) {
     console.error('Error fetching customers by salesman:', error);
+    throw error;
+  }
+};
+
+export const getWorkersBySalesman = async (salesmanId: string): Promise<UserData[]> => {
+  try {
+    const q = query(
+      collection(firestore, COLLECTIONS.USERS),
+      where('role', '==', 'worker'),
+      where('salesmanId', '==', salesmanId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const customers: UserData[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      customers.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+      } as UserData);
+    });
+    
+    return customers;
+  } catch (error) {
+    console.error('Error fetching workers by salesman:', error);
     throw error;
   }
 };

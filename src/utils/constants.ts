@@ -223,6 +223,7 @@ export const USER_ROLES = {
   ADMIN: 'admin',
   SALESMAN: 'salesman',
   CUSTOMER: 'customer',
+  WORKER: 'worker',
 } as const;
 
 export const getCardWidth = (containerPadding: number = 32, gap: number = 16) => {

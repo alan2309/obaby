@@ -1,3 +1,4 @@
+// src/screens/salesman/DashboardSalesman.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import { View, StyleSheet, ScrollView, Dimensions } from "react-native";
 import {
@@ -8,11 +9,12 @@ import {
   ActivityIndicator,
   Button,
 } from "react-native-paper";
-import { LineChart } from "react-native-chart-kit";
+import { LineChart, BarChart } from "react-native-chart-kit";
 import { useAuth } from "../../context/AuthContext";
 import {
   Order,
   getOrdersBySalesman,
+  getWorkersBySalesman,
 } from "../../firebase/firestore";
 import {
   calculateSalesmanPerformance,
@@ -27,6 +29,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const DashboardSalesman: React.FC = () => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [workers, setWorkers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<"week" | "month" | "year">("month");
@@ -47,17 +50,28 @@ const DashboardSalesman: React.FC = () => {
 
       console.log("🔄 Loading salesman data for user:", user.uid);
 
-      const ordersData = await getOrdersBySalesman(user.uid).catch((err) => {
-        console.log(
-          "⚠️ Orders loading failed, using empty array:",
-          err.message
-        );
-        return [];
-      });
+      const [ordersData, workersData] = await Promise.all([
+        getOrdersBySalesman(user.uid).catch((err) => {
+          console.log(
+            "⚠️ Orders loading failed, using empty array:",
+            err.message
+          );
+          return [];
+        }),
+        getWorkersBySalesman(user.uid).catch((err) => {
+          console.log(
+            "⚠️ Workers loading failed, using empty array:",
+            err.message
+          );
+          return [];
+        })
+      ]);
 
       console.log("✅ Orders loaded:", ordersData.length);
+      console.log("✅ Workers loaded:", workersData.length);
 
       setOrders(ordersData);
+      setWorkers(workersData);
       setError(null);
     } catch (error: any) {
       console.error("❌ Error loading salesman data:", error);
@@ -130,6 +144,64 @@ const DashboardSalesman: React.FC = () => {
     });
   }, [orders, timeRange]);
 
+  // Calculate worker performance with detailed metrics
+  const workerPerformance = useMemo(() => {
+    if (workers.length === 0 || filteredDeliveredOrders.length === 0) {
+      return [];
+    }
+
+    const workerMap = new Map();
+
+    // Initialize all workers with zero values
+    workers.forEach(worker => {
+      workerMap.set(worker.id, {
+        workerId: worker.id,
+        workerName: worker.name,
+        itemsSold: 0,
+        ordersCount: 0,
+        totalSales: 0,
+        totalProfit: 0,
+        efficiency: 0
+      });
+    });
+
+    // Calculate performance for each worker
+    filteredDeliveredOrders.forEach(order => {
+      if (order.workerId && workerMap.has(order.workerId)) {
+        const workerData = workerMap.get(order.workerId);
+        const orderItems = order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        const orderProfit = order.totalProfit || 0;
+        
+        workerMap.set(order.workerId, {
+          ...workerData,
+          itemsSold: workerData.itemsSold + orderItems,
+          ordersCount: workerData.ordersCount + 1,
+          totalSales: workerData.totalSales + (order.totalAmount || 0),
+          totalProfit: workerData.totalProfit + orderProfit
+        });
+      }
+    });
+
+    // Calculate efficiency (items per order)
+    workerMap.forEach((workerData, workerId) => {
+      if (workerData.ordersCount > 0) {
+        workerMap.set(workerId, {
+          ...workerData,
+          efficiency: Math.round((workerData.itemsSold / workerData.ordersCount) * 100) / 100
+        });
+      }
+    });
+
+    return Array.from(workerMap.values())
+      .filter(worker => worker.itemsSold > 0)
+      .sort((a, b) => b.itemsSold - a.itemsSold);
+  }, [workers, filteredDeliveredOrders]);
+
+  // Get top worker
+  const topWorker = useMemo(() => {
+    return workerPerformance.length > 0 ? workerPerformance[0] : null;
+  }, [workerPerformance]);
+
   // Calculate performance metrics using time-filtered delivered orders
   const performance = useMemo(() => {
     const totalOrders = filteredDeliveredOrders.length;
@@ -150,9 +222,11 @@ const DashboardSalesman: React.FC = () => {
       totalSales,
       totalProductsSold,
       completionRate: Math.round(completionRate),
-      pendingOrders: filteredAllOrders.filter(order => order.status === "Pending"|| order.status === "Partially Delivered").length
+      pendingOrders: filteredAllOrders.filter(order => order.status === "Pending"|| order.status === "Partially Delivered").length,
+      topWorkerName: topWorker ? topWorker.workerName : "No data",
+      workerCount: workerPerformance.length
     };
-  }, [filteredDeliveredOrders, filteredAllOrders]);
+  }, [filteredDeliveredOrders, filteredAllOrders, topWorker, workerPerformance]);
 
   // Calculate chart data based on time range (items sold from delivered orders only)
   const chartData = useMemo(() => {
@@ -188,15 +262,44 @@ const DashboardSalesman: React.FC = () => {
     };
   }, [filteredDeliveredOrders, timeRange]);
 
+  // Worker performance chart data
+  const workerChartData = useMemo(() => {
+    if (workerPerformance.length === 0) return null;
+
+    const topWorkers = workerPerformance.slice(0, 5); // Show top 5 workers
+    
+    return {
+      labels: topWorkers.map(worker => 
+        worker.workerName.length > 8 
+          ? worker.workerName.substring(0, 8) + '...' 
+          : worker.workerName
+      ),
+      datasets: [{
+        data: topWorkers.map(worker => worker.itemsSold),
+      }],
+    };
+  }, [workerPerformance]);
+
   const chartConfig = {
     backgroundColor: theme.colors.surface,
     backgroundGradientFrom: theme.colors.surface,
-    backgroundGradientTo: theme.colors.surface,
+    backgroundGradientTo: theme.colors.secondary,
     decimalPlaces: 0,
     color: (opacity = 1) => `rgba(247, 202, 201, ${opacity})`,
     labelColor: (opacity = 1) => `rgba(59, 59, 59, ${opacity})`,
     style: { borderRadius: 16 },
     propsForDots: { r: "4", strokeWidth: "2", stroke: "#F7CAC9" },
+  };
+
+  const barChartConfig = {
+    backgroundColor: theme.colors.surface,
+    backgroundGradientFrom: theme.colors.surface,
+    backgroundGradientTo: theme.colors.surface,
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(86, 156, 214, ${opacity})`,
+    labelColor: (opacity = 1) => `rgba(59, 59, 59, ${opacity})`,
+    style: { borderRadius: 16 },
+    barPercentage: 0.6,
   };
 
   const getStatusColor = (status?: string) => {
@@ -236,7 +339,7 @@ const DashboardSalesman: React.FC = () => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text variant="headlineMedium" style={styles.title}>
-        Salesman Dashboard
+        Distributor Dashboard
       </Text>
 
       <Text variant="bodyLarge" style={styles.welcome}>
@@ -317,15 +420,51 @@ const DashboardSalesman: React.FC = () => {
         <Card style={styles.metricCard}>
           <Card.Content style={styles.metricContent}>
             <Text style={styles.metricValue}>
-              {performance.completionRate}%
+              {performance.topWorkerName}
             </Text>
-            <Text style={styles.metricLabel}>Completion Rate</Text>
+            <Text style={styles.metricLabel}>Top Salesman</Text>
             <Text style={styles.metricSubtext}>
-              {performance.deliveredOrders}/{filteredAllOrders.length} orders
+              Most items sold
             </Text>
           </Card.Content>
         </Card>
       </View>
+
+      {/* Top Worker Section */}
+      {topWorker && (
+        <Card style={styles.topWorkerCard}>
+          <Card.Content>
+            <Text variant="titleLarge" style={styles.topWorkerTitle}>
+              🏆 Top Performing Salesman
+            </Text>
+            <View style={styles.topWorkerContent}>
+              <View style={styles.topWorkerInfo}>
+                <Text style={styles.topWorkerName}>{topWorker.workerName}</Text>
+                <View style={styles.topWorkerStats}>
+                  <Text style={styles.topWorkerStat}>
+                    <Text style={styles.statValue}>{topWorker.itemsSold}</Text> items sold
+                  </Text>
+                  <Text style={styles.topWorkerStat}>
+                    <Text style={styles.statValue}>{topWorker.ordersCount}</Text> orders
+                  </Text>
+                  <Text style={styles.topWorkerStat}>
+                    <Text style={styles.statValue}>₹{topWorker.totalSales.toFixed(0)}</Text> sales
+                  </Text>
+                  <Text style={styles.topWorkerStat}>
+                    <Text style={styles.statValue}>{topWorker.efficiency}</Text> items/order
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.topWorkerBadge}>
+                <Text style={styles.topWorkerRank}>#1</Text>
+                <Text style={styles.topWorkerSubtext}>Top Performer</Text>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
+      )}
+
+      {/* Worker Performance Chart */}
 
       {/* Items Sold Chart - Only show if we have data */}
       {chartData.data.length > 0 && chartData.data.some((val) => val > 0) && (
@@ -363,6 +502,47 @@ const DashboardSalesman: React.FC = () => {
         </Card>
       )}
 
+      {/* Worker Performance Table */}
+      {workerPerformance.length > 0 && (
+        <Card style={styles.performanceCard}>
+          <Card.Content>
+            <Text variant="titleLarge" style={styles.performanceTitle}>
+              Salesman Performance Details
+            </Text>
+            <DataTable>
+              <DataTable.Header>
+                <DataTable.Title>Salesman</DataTable.Title>
+                <DataTable.Title numeric>Items</DataTable.Title>
+                <DataTable.Title numeric>Orders</DataTable.Title>
+                <DataTable.Title numeric>Sales</DataTable.Title>
+              </DataTable.Header>
+              {workerPerformance.map((worker, index) => (
+                <DataTable.Row key={worker.workerId}>
+                  <DataTable.Cell>
+                    <View style={styles.workerCell}>
+                      <View style={[
+                        styles.rankBadge,
+                        index === 0 && styles.rankBadgeGold,
+                        index === 1 && styles.rankBadgeSilver,
+                        index === 2 && styles.rankBadgeBronze
+                      ]}>
+                        <Text style={styles.rankText}>#{index + 1}</Text>
+                      </View>
+                      <Text style={styles.workerTableName}>
+                        {worker.workerName}
+                      </Text>
+                    </View>
+                  </DataTable.Cell>
+                  <DataTable.Cell numeric>{worker.itemsSold}</DataTable.Cell>
+                  <DataTable.Cell numeric>{worker.ordersCount}</DataTable.Cell>
+                  <DataTable.Cell numeric>₹{worker.totalSales.toFixed(0)}</DataTable.Cell>
+                </DataTable.Row>
+              ))}
+            </DataTable>
+          </Card.Content>
+        </Card>
+      )}
+
       {/* Recent Orders */}
       <Card style={styles.ordersCard}>
         <View style={styles.clipped}>
@@ -379,6 +559,11 @@ const DashboardSalesman: React.FC = () => {
                   <Text style={styles.orderDate}>
                     {order.createdAt?.toLocaleDateString?.() || 'N/A'}
                   </Text>
+                  {order.workerName && (
+                    <Text style={styles.orderWorker}>
+                      Salesman: {order.workerName}
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.orderDetails}>
                   <Text style={styles.orderAmount}>
@@ -491,6 +676,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#E6C76E",
     marginBottom: scaleSize(4),
+    textAlign: 'center',
   },
   metricLabel: {
     fontSize: scaleSize(11),
@@ -510,6 +696,151 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignContent: "center",
     marginBottom: scaleSize(4),
+  },
+  // Top Worker Section
+  topWorkerCard: {
+    marginBottom: scaleSize(20),
+    backgroundColor: "#FAF9F6",
+    borderColor: "#FFD700",
+    borderWidth: 2,
+  },
+  topWorkerTitle: {
+    textAlign: "center",
+    marginBottom: scaleSize(16),
+    color: "#3B3B3B",
+    fontWeight: "bold",
+  },
+  topWorkerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  topWorkerInfo: {
+    flex: 1,
+  },
+  topWorkerName: {
+    fontSize: scaleSize(18),
+    fontWeight: "bold",
+    color: "#3B3B3B",
+    marginBottom: scaleSize(8),
+  },
+  topWorkerStats: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: scaleSize(12),
+  },
+  topWorkerStat: {
+    fontSize: scaleSize(12),
+    color: "#666",
+    marginBottom: scaleSize(4),
+  },
+  statValue: {
+    fontWeight: "bold",
+    color: "#4CAF50",
+  },
+  topWorkerBadge: {
+    backgroundColor: "#FFD700",
+    borderRadius: 20,
+    width: scaleSize(60),
+    height: scaleSize(60),
+    justifyContent: "center",
+    alignItems: "center",
+    padding: scaleSize(8),
+  },
+  topWorkerRank: {
+    fontSize: scaleSize(18),
+    fontWeight: "bold",
+    color: "#3B3B3B",
+  },
+  topWorkerSubtext: {
+    fontSize: scaleSize(9),
+    color: "#3B3B3B",
+    textAlign: "center",
+    marginTop: scaleSize(2),
+  },
+  // Worker Performance
+  workerList: {
+    marginTop: scaleSize(16),
+  },
+  workerListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: scaleSize(8),
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  workerRank: {
+    backgroundColor: "#E3F2FD",
+    borderRadius: 12,
+    width: scaleSize(24),
+    height: scaleSize(24),
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: scaleSize(12),
+  },
+  workerRankText: {
+    fontSize: scaleSize(10),
+    fontWeight: "bold",
+    color: "#2196F3",
+  },
+  workerDetails: {
+    flex: 1,
+  },
+  workerListName: {
+    fontSize: scaleSize(14),
+    fontWeight: "600",
+    color: "#3B3B3B",
+    marginBottom: scaleSize(2),
+  },
+  workerListStats: {
+    fontSize: scaleSize(11),
+    color: "#666",
+  },
+  workerListSales: {
+    fontSize: scaleSize(12),
+    fontWeight: "600",
+    color: "#E6C76E",
+  },
+  // Performance Table
+  performanceCard: {
+    marginBottom: scaleSize(20),
+    backgroundColor: "#FAF9F6",
+  },
+  performanceTitle: {
+    textAlign: "center",
+    marginBottom: scaleSize(16),
+    color: "#3B3B3B",
+  },
+  workerCell: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  rankBadge: {
+    backgroundColor: "#E3F2FD",
+    borderRadius: 10,
+    width: scaleSize(20),
+    height: scaleSize(20),
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: scaleSize(8),
+  },
+  rankBadgeGold: {
+    backgroundColor: "#FFD700",
+  },
+  rankBadgeSilver: {
+    backgroundColor: "#C0C0C0",
+  },
+  rankBadgeBronze: {
+    backgroundColor: "#CD7F32",
+  },
+  rankText: {
+    fontSize: scaleSize(9),
+    fontWeight: "bold",
+    color: "#3B3B3B",
+  },
+  workerTableName: {
+    fontSize: scaleSize(12),
+    color: "#3B3B3B",
   },
   // Chart Styles
   chartCard: {
@@ -559,6 +890,12 @@ const styles = StyleSheet.create({
   orderDate: {
     fontSize: scaleSize(12),
     color: "#A08B73",
+    marginBottom: scaleSize(2),
+  },
+  orderWorker: {
+    fontSize: scaleSize(11),
+    color: "#2196F3",
+    fontStyle: "italic",
   },
   orderDetails: {
     alignItems: "flex-end",

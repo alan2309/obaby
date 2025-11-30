@@ -21,7 +21,7 @@ import {
 } from 'react-native-paper';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
-import { createOrder, getCustomers, checkOrderStock, getCustomersBySalesman } from '../../firebase/firestore';
+import { createOrder, getCustomers, checkOrderStock, getCustomersBySalesman, getWorkersBySalesman } from '../../firebase/firestore';
 import { 
   scaleSize, 
   scaleFont,
@@ -40,34 +40,55 @@ const OrderScreen: React.FC = () => {
   const { user } = useAuth();
   const [customers, setCustomers] = useState<UserData[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<UserData[]>([]);
+  const [workers, setWorkers] = useState<UserData[]>([]);
+  const [filteredWorkers, setFilteredWorkers] = useState<UserData[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<UserData | null>(null);
+  const [selectedWorker, setSelectedWorker] = useState<UserData | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showWorkerModal, setShowWorkerModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [workerSearchQuery, setWorkerSearchQuery] = useState('');
 
   const screenSize = getScreenSize();
 
   useEffect(() => {
     loadCustomers();
+    loadWorkers();
   }, []);
 
   // Filter customers based on search query
   useEffect(() => {
-    if (searchQuery.trim() === '') {
+    if (customerSearchQuery.trim() === '') {
       setFilteredCustomers(customers);
     } else {
       const filtered = customers.filter(customer =>
-        customer.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customer.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customer.phone?.includes(searchQuery) ||
-        customer.city?.toLowerCase().includes(searchQuery.toLowerCase())
+        customer.name?.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+        customer.email?.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+        customer.phone?.includes(customerSearchQuery) ||
+        customer.city?.toLowerCase().includes(customerSearchQuery.toLowerCase())
       );
       setFilteredCustomers(filtered);
     }
-  }, [searchQuery, customers]);
+  }, [customerSearchQuery, customers]);
+
+  // Filter workers based on search query
+  useEffect(() => {
+    if (workerSearchQuery.trim() === '') {
+      setFilteredWorkers(workers);
+    } else {
+      const filtered = workers.filter(worker =>
+        worker.name?.toLowerCase().includes(workerSearchQuery.toLowerCase()) ||
+        worker.email?.toLowerCase().includes(workerSearchQuery.toLowerCase()) ||
+        worker.phone?.includes(workerSearchQuery) ||
+        worker.city?.toLowerCase().includes(workerSearchQuery.toLowerCase())
+      );
+      setFilteredWorkers(filtered);
+    }
+  }, [workerSearchQuery, workers]);
 
   const loadCustomers = async () => {
     try {
@@ -87,6 +108,19 @@ const OrderScreen: React.FC = () => {
       setSnackbarVisible(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadWorkers = async () => {
+    try {
+      // Get only workers assigned to this salesman
+      if (user?.uid) {
+        const workersData = await getWorkersBySalesman(user.uid);
+        setWorkers(workersData);
+        setFilteredWorkers(workersData);
+      }
+    } catch (error: any) {
+      console.error('Error loading workers:', error);
     }
   };
 
@@ -140,7 +174,7 @@ const OrderScreen: React.FC = () => {
 
       Alert.alert(
         'Confirm Order',
-        `Create order for ${selectedCustomer.name} with ${getTotalItems()} items totaling ₹${getTotalAmount().toFixed(2)}?`,
+        `Create order for ${selectedCustomer.name}${selectedWorker ? ` assigned to worker ${selectedWorker.name}` : ''} with ${getTotalItems()} items totaling ₹${getTotalAmount().toFixed(2)}?`,
         [
           { text: 'Cancel', style: 'cancel' },
           { 
@@ -216,17 +250,23 @@ const OrderScreen: React.FC = () => {
       discountGiven: 0,
     }));
 
-    const orderData = {
+    const orderData: any = {
       customerId: selectedCustomer!.id!,
-      customerName: selectedCustomer!.name, // Add customer name
+      customerName: selectedCustomer!.name,
       salesmanId: user!.uid,
-      salesmanName: user!.name || 'Salesman', // Add salesman name
+      salesmanName: user!.name || 'Salesman',
       items: orderItems,
       totalAmount: getTotalAmount(),
       totalCost: getTotalCost(),
       totalProfit: getTotalProfit(),
       status: 'Pending' as const,
     };
+
+    // Add worker information if selected
+    if (selectedWorker) {
+      orderData.workerId = selectedWorker.id;
+      orderData.workerName = selectedWorker.name;
+    }
 
     const result = await createOrder(orderData);
     
@@ -236,6 +276,7 @@ const OrderScreen: React.FC = () => {
       
       clearCart();
       setSelectedCustomer(null);
+      setSelectedWorker(null);
     } else {
       if (result.outOfStockItems && result.outOfStockItems.length > 0) {
         showOutOfStockAlert(result.outOfStockItems.map(item => ({
@@ -261,21 +302,38 @@ const OrderScreen: React.FC = () => {
   }
 };
 
-  // Reset search when modal opens/closes
-  const handleModalOpen = () => {
-    setSearchQuery('');
+  // Modal handlers for customer
+  const handleCustomerModalOpen = () => {
+    setCustomerSearchQuery('');
     setShowCustomerModal(true);
   };
 
-  const handleModalClose = () => {
-    setSearchQuery('');
+  const handleCustomerModalClose = () => {
+    setCustomerSearchQuery('');
     setShowCustomerModal(false);
   };
 
   const handleCustomerSelect = (customer: UserData) => {
     setSelectedCustomer(customer);
-    setSearchQuery('');
+    setCustomerSearchQuery('');
     setShowCustomerModal(false);
+  };
+
+  // Modal handlers for worker
+  const handleWorkerModalOpen = () => {
+    setWorkerSearchQuery('');
+    setShowWorkerModal(true);
+  };
+
+  const handleWorkerModalClose = () => {
+    setWorkerSearchQuery('');
+    setShowWorkerModal(false);
+  };
+
+  const handleWorkerSelect = (worker: UserData) => {
+    setSelectedWorker(worker);
+    setWorkerSearchQuery('');
+    setShowWorkerModal(false);
   };
 
   if (cartItems.length === 0) {
@@ -342,39 +400,85 @@ const OrderScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
-        {/* Customer Selection */}
+        {/* Customer and Worker Selection */}
         <Card style={[styles.sectionCard, { margin: cardMargin, marginTop: 50 }]}>
           <Card.Content style={{ padding: cardPadding }}>
             <Text variant={sectionTitleVariant as any} style={styles.sectionTitle}>
-              Customer Selection
+              Order Assignment
             </Text>
-            {selectedCustomer ? (
-              <View style={styles.selectedCustomer}>
-                <Text style={styles.customerName}>{selectedCustomer.name}</Text>
-                <Text style={styles.customerDetails}>
-                  {selectedCustomer.email} • {selectedCustomer.phone}
-                  {selectedCustomer.city ? ` • ${selectedCustomer.city}` : ''}
-                </Text>
-                <Button 
-                  mode="outlined" 
-                  onPress={handleModalOpen}
-                  style={styles.changeCustomerButton}
-                >
-                  Change Customer
-                </Button>
+            
+            {/* Customer Selection */}
+            <View style={styles.selectionSection}>
+              <Text style={styles.selectionLabel}>Customer *</Text>
+              {selectedCustomer ? (
+                <View style={styles.selectedPerson}>
+                  <View style={styles.personInfo}>
+                    <Text style={styles.personName}>{selectedCustomer.name}</Text>
+                    <Text style={styles.personDetails}>
+                      {selectedCustomer.email} • {selectedCustomer.phone}
+                      {selectedCustomer.city ? ` • ${selectedCustomer.city}` : ''}
+                    </Text>
+                  </View>
+                  <Button 
+                    mode="outlined" 
+                    onPress={handleCustomerModalOpen}
+                    style={styles.changeButton}
+                  >
+                    Change
+                  </Button>
+                </View>
+              ) : (
+                <View style={styles.selectContainer}>
+                  <Button 
+                    mode="contained" 
+                    onPress={handleCustomerModalOpen}
+                    style={styles.selectButton}
+                  >
+                    Select Customer
+                  </Button>
+                </View>
+              )}
+            </View>
+
+            <Divider style={styles.selectionDivider} />
+
+            {/* Worker Selection (Optional) */}
+            <View style={styles.selectionSection}>
+              <View style={styles.workerHeader}>
+                <Text style={styles.selectionLabel}>Assign to Salesman</Text>
               </View>
-            ) : (
-              <View style={styles.selectCustomerContainer}>
-                <Button 
-                  mode="contained" 
-                  onPress={handleModalOpen}
-                  style={styles.selectCustomerButton}
-                >
-                  Select Customer
-                </Button>
-                
-              </View>
-            )}
+              {selectedWorker ? (
+                <View style={styles.selectedPerson}>
+                  <View style={styles.personInfo}>
+                    <Text style={styles.personName}>{selectedWorker.name}</Text>
+                    <Text style={styles.personDetails}>
+                      {selectedWorker.email} • {selectedWorker.phone}
+                      {selectedWorker.city ? ` • ${selectedWorker.city}` : ''}
+                    </Text>
+                  </View>
+                  <Button 
+                    mode="outlined" 
+                    onPress={handleWorkerModalOpen}
+                    style={styles.changeButton}
+                  >
+                    Change
+                  </Button>
+                </View>
+              ) : (
+                <View style={styles.selectContainer}>
+                  <Button 
+                    mode="outlined" 
+                    onPress={handleWorkerModalOpen}
+                    style={styles.selectWorkerButton}
+                  >
+                    Select Worker
+                  </Button>
+                  <Text style={styles.optionalHint}>
+                    Optional: Assign this order to a worker for fulfillment
+                  </Text>
+                </View>
+              )}
+            </View>
           </Card.Content>
         </Card>
 
@@ -512,11 +616,11 @@ const OrderScreen: React.FC = () => {
         </Button>
       </View>
 
-      {/* Customer Selection Modal with Search */}
+      {/* Customer Selection Modal */}
       <Portal>
         <Modal
           visible={showCustomerModal}
-          onDismiss={handleModalClose}
+          onDismiss={handleCustomerModalClose}
           contentContainerStyle={[
             styles.modalContainer,
             { width: currentScreenConfig.modal.width }
@@ -526,15 +630,14 @@ const OrderScreen: React.FC = () => {
             My Customers ({customers.length})
           </Text>
           
-          {/* Search Bar */}
           <View style={styles.searchContainer}>
             <Searchbar
               placeholder="Search your customers by name, email, phone, or city..."
-              onChangeText={setSearchQuery}
-              value={searchQuery}
+              onChangeText={setCustomerSearchQuery}
+              value={customerSearchQuery}
               style={styles.searchBar}
-              icon={searchQuery ? "close" : "magnify"}
-              onIconPress={searchQuery ? () => setSearchQuery('') : undefined}
+              icon={customerSearchQuery ? "close" : "magnify"}
+              onIconPress={customerSearchQuery ? () => setCustomerSearchQuery('') : undefined}
             />
           </View>
 
@@ -543,15 +646,15 @@ const OrderScreen: React.FC = () => {
           ) : (
             <ScrollView style={styles.modalScrollView}>
               {filteredCustomers.length === 0 ? (
-                <View style={styles.noCustomersContainer}>
-                  <Text style={styles.noCustomersText}>
-                    {searchQuery 
+                <View style={styles.noResultsContainer}>
+                  <Text style={styles.noResultsText}>
+                    {customerSearchQuery 
                       ? 'No customers found matching your search.' 
                       : 'No customers assigned to you yet.'
                     }
                   </Text>
-                  {!searchQuery && (
-                    <Text style={styles.noCustomersHint}>
+                  {!customerSearchQuery && (
+                    <Text style={styles.noResultsHint}>
                       Contact your administrator to get customers assigned to you.
                     </Text>
                   )}
@@ -563,9 +666,9 @@ const OrderScreen: React.FC = () => {
                     title={customer.name}
                     description={`${customer.email} • ${customer.phone}${customer.city ? ` • ${customer.city}` : ''}`}
                     onPress={() => handleCustomerSelect(customer)}
-                    style={styles.customerItem}
-                    titleStyle={styles.customerTitle}
-                    descriptionStyle={styles.customerDescription}  
+                    style={styles.personItem}
+                    titleStyle={styles.personTitle}
+                    descriptionStyle={styles.personDescription}  
                   />
                 ))
               )}
@@ -573,7 +676,71 @@ const OrderScreen: React.FC = () => {
           )}
           <Button
             mode="outlined"
-            onPress={handleModalClose}
+            onPress={handleCustomerModalClose}
+            style={styles.modalCloseButton}
+          >
+            Cancel
+          </Button>
+        </Modal>
+      </Portal>
+
+      {/* Worker Selection Modal */}
+      <Portal>
+        <Modal
+          visible={showWorkerModal}
+          onDismiss={handleWorkerModalClose}
+          contentContainerStyle={[
+            styles.modalContainer,
+            { width: currentScreenConfig.modal.width }
+          ]}
+        >
+          <Text variant={modalTitleVariant as any} style={styles.modalTitle}>
+            My Workers ({workers.length})
+          </Text>
+          
+          <View style={styles.searchContainer}>
+            <Searchbar
+              placeholder="Search your workers by name, email, phone, or city..."
+              onChangeText={setWorkerSearchQuery}
+              value={workerSearchQuery}
+              style={styles.searchBar}
+              icon={workerSearchQuery ? "close" : "magnify"}
+              onIconPress={workerSearchQuery ? () => setWorkerSearchQuery('') : undefined}
+            />
+          </View>
+
+          <ScrollView style={styles.modalScrollView}>
+            {filteredWorkers.length === 0 ? (
+              <View style={styles.noResultsContainer}>
+                <Text style={styles.noResultsText}>
+                  {workerSearchQuery 
+                    ? 'No workers found matching your search.' 
+                    : 'No workers assigned to you yet.'
+                  }
+                </Text>
+                {!workerSearchQuery && (
+                  <Text style={styles.noResultsHint}>
+                    You can create workers from the Workers section.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              filteredWorkers.map(worker => (
+                <List.Item
+                  key={worker.id}
+                  title={worker.name}
+                  description={`${worker.email} • ${worker.phone}${worker.city ? ` • ${worker.city}` : ''}`}
+                  onPress={() => handleWorkerSelect(worker)}
+                  style={styles.personItem}
+                  titleStyle={styles.personTitle}
+                  descriptionStyle={styles.personDescription}  
+                />
+              ))
+            )}
+          </ScrollView>
+          <Button
+            mode="outlined"
+            onPress={handleWorkerModalClose}
             style={styles.modalCloseButton}
           >
             Cancel
@@ -627,51 +794,65 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
     textAlign: 'center',
   },
-  headerActions: {
+  selectionSection: {
+    marginBottom: theme.spacing.lg,
+  },
+  selectionLabel: {
+    ...theme.typography.bodyLarge,
+    color: theme.colors.text,
+    fontWeight: '600',
+    marginBottom: theme.spacing.md,
+  },
+  workerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  customerCountBadge: {
-    backgroundColor: theme.colors.accent,
-    paddingHorizontal: scaleSize(8),
-    paddingVertical: scaleSize(4),
+  clearWorkerButton: {
+    marginBottom: theme.spacing.md,
+  },
+  selectedPerson: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceVariant,
+    padding: theme.spacing.md,
     borderRadius: theme.roundness,
   },
-  customerCountText: {
-    color: 'white',
-    fontSize: scaleFont(12),
-    fontWeight: 'bold',
+  personInfo: {
+    flex: 1,
   },
-  selectedCustomer: {
-    alignItems: 'center',
-  },
-  customerName: {
-    ...theme.typography.headlineSmall,
+  personName: {
+    ...theme.typography.bodyLarge,
     color: theme.colors.text,
+    fontWeight: '600',
     marginBottom: theme.spacing.xs,
   },
-  customerDetails: {
+  personDetails: {
     ...theme.typography.bodyMedium,
     color: theme.colors.placeholder,
-    marginBottom: theme.spacing.lg,
-    textAlign: 'center',
   },
-  selectCustomerContainer: {
+  changeButton: {
+    borderColor: theme.colors.accent,
+  },
+  selectContainer: {
     alignItems: 'center',
   },
-  customerHint: {
+  selectButton: {
+    backgroundColor: theme.colors.accent,
+  },
+  selectWorkerButton: {
+    borderColor: theme.colors.accent,
+  },
+  optionalHint: {
     ...theme.typography.bodySmall,
     color: theme.colors.placeholder,
     marginTop: theme.spacing.sm,
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  changeCustomerButton: {
-    borderColor: theme.colors.accent,
-  },
-  selectCustomerButton: {
-    backgroundColor: theme.colors.accent,
+  selectionDivider: {
+    marginVertical: theme.spacing.lg,
   },
   orderItem: {
     paddingVertical: theme.spacing.lg,
@@ -775,8 +956,15 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
     fontWeight: 'bold',
   },
-  profitText: {
+  workerAssignment: {
+    backgroundColor: theme.colors.surfaceVariant,
+    padding: theme.spacing.md,
+    borderRadius: theme.roundness,
+    marginTop: theme.spacing.md,
+  },
+  workerName: {
     color: theme.colors.success,
+    fontWeight: 'bold',
   },
   footer: {
     backgroundColor: theme.colors.surface,
@@ -812,52 +1000,29 @@ const styles = StyleSheet.create({
   modalScrollView: {
     maxHeight: 400,
   },
-  customerItem: {
+  personItem: {
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
-  customerTitle: {
+  personTitle: {
     ...theme.typography.bodyLarge,
     fontWeight: '600',
   },
-  customerDescription: {
+  personDescription: {
     ...theme.typography.bodyMedium,
   },
-  customerStatus: {
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    gap: scaleSize(4),
-  },
-  pendingBadge: {
-    fontSize: scaleFont(10),
-    color: theme.colors.warning,
-    fontWeight: '600',
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: scaleSize(6),
-    paddingVertical: scaleSize(2),
-    borderRadius: theme.roundness,
-  },
-  assignedBadge: {
-    fontSize: scaleFont(10),
-    color: theme.colors.success,
-    fontWeight: '600',
-    backgroundColor: '#E8F5E8',
-    paddingHorizontal: scaleSize(6),
-    paddingVertical: scaleSize(2),
-    borderRadius: theme.roundness,
-  },
-  noCustomersContainer: {
+  noResultsContainer: {
     padding: theme.spacing.lg,
     alignItems: 'center',
   },
-  noCustomersText: {
+  noResultsText: {
     ...theme.typography.bodyMedium,
     textAlign: 'center',
     color: theme.colors.placeholder,
     fontStyle: 'italic',
     marginBottom: theme.spacing.sm,
   },
-  noCustomersHint: {
+  noResultsHint: {
     ...theme.typography.bodySmall,
     textAlign: 'center',
     color: theme.colors.placeholder,

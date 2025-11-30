@@ -28,7 +28,7 @@ const InventoryScreen: React.FC = () => {
       
       switch (viewMode) {
         case 'low':
-          productsData = await getLowStockProducts();
+          productsData = await getLowStockProducts(3);
           break;
         case 'out':
           productsData = await getOutOfStockProducts();

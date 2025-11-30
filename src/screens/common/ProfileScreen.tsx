@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text, Card, Button, Divider } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
+import { USER_ROLES } from '../../utils/constants';
 
 const ProfileScreen: React.FC = () => {
   const { user, logout } = useAuth();
@@ -46,7 +47,7 @@ const ProfileScreen: React.FC = () => {
           <View style={styles.infoContainer}>
             <Text variant="bodyLarge" style={styles.label}>Role:</Text>
             <Text variant="bodyLarge" style={styles.role}>
-              {user?.role?.toUpperCase()}
+              {user?.role===USER_ROLES.SALESMAN?"DISTRIBUTOR":user?.role.toUpperCase()}
             </Text>
           </View>
           

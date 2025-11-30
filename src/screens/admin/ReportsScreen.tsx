@@ -115,6 +115,107 @@ const ReportsScreen: React.FC = () => {
       .slice(0, 10); // Top 10 customers
   }, [filteredOrders, users]);
 
+  // Calculate top salesman
+  const calculateTopSalesman = useMemo(() => {
+    const salesmanStats: { [key: string]: {
+      salesman: any;
+      totalProductsSold: number;
+      totalOrders: number;
+      totalSales: number;
+      averageOrderValue: number;
+    } } = {};
+
+    // Process delivered orders only for salesman analysis
+    const deliveredOrders = filteredOrders.filter(order => order.status === 'Delivered');
+
+    deliveredOrders.forEach(order => {
+      const salesmanId = order.salesmanId;
+      
+      if (!salesmanStats[salesmanId]) {
+        const salesman = users.find(user => user.id === salesmanId || user.uid === salesmanId);
+        if (salesman) {
+          salesmanStats[salesmanId] = {
+            salesman,
+            totalProductsSold: 0,
+            totalOrders: 0,
+            totalSales: 0,
+            averageOrderValue: 0
+          };
+        }
+      }
+
+      if (salesmanStats[salesmanId]) {
+        const orderProducts = order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        
+        salesmanStats[salesmanId].totalProductsSold += orderProducts;
+        salesmanStats[salesmanId].totalOrders += 1;
+        salesmanStats[salesmanId].totalSales += order.totalAmount || 0;
+      }
+    });
+
+    // Calculate average order value and sort by total products sold
+    Object.values(salesmanStats).forEach(stat => {
+      stat.averageOrderValue = stat.totalOrders > 0 ? stat.totalSales / stat.totalOrders : 0;
+    });
+
+    return Object.values(salesmanStats)
+      .sort((a, b) => b.totalProductsSold - a.totalProductsSold)
+      .slice(0, 1)[0]; // Get only the top salesman
+  }, [filteredOrders, users]);
+
+  // Calculate top workers
+  const calculateTopWorkers = useMemo(() => {
+    const workerStats: { [key: string]: {
+      worker: any;
+      totalProductsSold: number;
+      totalOrders: number;
+      totalSales: number;
+      averageOrderValue: number;
+      salesman: any;
+    } } = {};
+
+    // Process delivered orders only for worker analysis
+    const deliveredOrders = filteredOrders.filter(order => order.status === 'Delivered' && order.workerId);
+
+    deliveredOrders.forEach(order => {
+      const workerId = order.workerId;
+      
+      if (!workerStats[workerId]) {
+        const worker = users.find(user => user.id === workerId || user.uid === workerId);
+        const salesman = worker?.salesmanId ? 
+          users.find(user => (user.id === worker.salesmanId || user.uid === worker.salesmanId)) : null;
+
+        if (worker) {
+          workerStats[workerId] = {
+            worker,
+            totalProductsSold: 0,
+            totalOrders: 0,
+            totalSales: 0,
+            averageOrderValue: 0,
+            salesman
+          };
+        }
+      }
+
+      if (workerStats[workerId]) {
+        const orderProducts = order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        
+        workerStats[workerId].totalProductsSold += orderProducts;
+        workerStats[workerId].totalOrders += 1;
+        workerStats[workerId].totalSales += order.totalAmount || 0;
+      }
+    });
+
+    // Calculate average order value and sort by total products sold
+    Object.values(workerStats).forEach(stat => {
+      stat.averageOrderValue = stat.totalOrders > 0 ? stat.totalSales / stat.totalOrders : 0;
+    });
+
+    return Object.values(workerStats)
+      .sort((a, b) => b.totalProductsSold - a.totalProductsSold)
+      .slice(0, 5); // Top 5 workers
+  }, [filteredOrders, users]);
+
   // Generate report data with filtered orders
   const report = useMemo(() => {
     const deliveredOrders = filteredOrders.filter(order => order.status === 'Delivered');
@@ -159,9 +260,11 @@ const ReportsScreen: React.FC = () => {
       topProducts,
       salesmanPerformance: salesmanPerformance.slice(0, 5),
       topCustomers: calculateTopCustomers,
+      topSalesman: calculateTopSalesman,
+      topWorkers: calculateTopWorkers,
       totalFilteredOrders: filteredOrders.length
     };
-  }, [filteredOrders, users, dateRange, calculateTopCustomers]);
+  }, [filteredOrders, users, dateRange, calculateTopCustomers, calculateTopSalesman, calculateTopWorkers]);
 
   const shareReport = async () => {
     const periodText = dateRange === 'week' ? 'Last 7 Days' : 
@@ -178,16 +281,27 @@ const ReportsScreen: React.FC = () => {
 • Completed Orders: ${report.summary.totalOrders}
 • Pending Orders: ${report.summary.pendingOrders}
 • Total Orders: ${report.totalFilteredOrders}
-• Completion Rate: ${report.summary.completionRate}%
+• Top Salesman: ${report.topSalesman?.salesman?.name || 'No data'}
 
 🏆 TOP 10 PRODUCTS:
 ${report.topProducts.map((product, index) => 
   `${index + 1}. ${product.name} - ${product.sales} units - ₹${product.profit.toFixed(2)} revenue`
 ).join('\n')}
 
+👑 TOP SALESMAN:
+${report.topSalesman ? 
+  `• ${report.topSalesman.salesman.name} - ${report.topSalesman.totalProductsSold} products - ${report.topSalesman.totalOrders} orders - ₹${report.topSalesman.totalSales.toFixed(2)} sales` : 
+  'No salesman data'
+}
+
 👥 TOP 5 SALESMEN:
 ${report.salesmanPerformance.map((salesman, index) => 
   `${index + 1}. ${salesman.name} - ${salesman.productsSold} products - ${salesman.totalOrders} orders`
+).join('\n')}
+
+🔧 TOP 5 WORKERS:
+${report.topWorkers.map((worker, index) => 
+  `${index + 1}. ${worker.worker.name} - ${worker.totalProductsSold} products - ${worker.totalOrders} orders - ₹${worker.totalSales.toFixed(2)} sales`
 ).join('\n')}
 
 👥 TOP 10 CUSTOMERS:
@@ -209,14 +323,14 @@ ${report.topCustomers.map((customer, index) =>
   const exportToCSV = () => {
     // Simple CSV export implementation
     const csvContent = [
-      ['Period', 'Total Sales', 'Products Sold', 'Total Orders', 'Pending Orders', 'Completion Rate'],
+      ['Period', 'Total Sales', 'Products Sold', 'Total Orders', 'Pending Orders', 'Top Salesman'],
       [
         dateRange,
         report.summary.totalSales.toFixed(2),
         report.summary.totalProductsSold.toString(),
         report.summary.totalOrders.toString(),
         report.summary.pendingOrders.toString(),
-        report.summary.completionRate.toString() + '%'
+        report.topSalesman?.salesman?.name || 'No data'
       ]
     ].map(row => row.join(',')).join('\n');
 
@@ -309,11 +423,19 @@ ${report.topCustomers.map((customer, index) =>
           </Card.Content>
         </Card>
 
+        {/* Top Salesman Card - Replaces Completion Rate */}
         <Card style={styles.summaryCard}>
           <Card.Content style={styles.summaryContent}>
-            <Text style={styles.summaryValue}>{report.summary.completionRate}%</Text>
-            <Text style={styles.summaryLabel}>Completion Rate</Text>
-            <Text style={styles.summarySubtext}>Order fulfillment</Text>
+            <Text style={[styles.summaryValue, styles.topSalesmanValue]}>
+              {report.topSalesman?.salesman?.name || '—'}
+            </Text>
+            <Text style={styles.summaryLabel}>Top Distributor</Text>
+            <Text style={styles.summarySubtext}>
+              {report.topSalesman ? 
+                `${report.topSalesman.totalProductsSold} products` : 
+                'No data'
+              }
+            </Text>
           </Card.Content>
         </Card>
       </View>
@@ -375,17 +497,18 @@ ${report.topCustomers.map((customer, index) =>
         </Card.Content>
       </Card>
 
-      {/* Top Salesmen */}
+      {/* Top 5 Salesmen */}
       <Card style={styles.reportCard}>
         <Card.Content>
           <Text variant="titleLarge" style={styles.reportTitle}>
-            👥 Top 5 Salesmen ({dateRange}ly)
+            👥 Top 5 Distributors ({dateRange}ly)
           </Text>
           <DataTable>
             <DataTable.Header>
               <DataTable.Title style={styles.salesmanColumn}>Salesman</DataTable.Title>
-              <DataTable.Title numeric style={styles.productsColumn}>Products</DataTable.Title>
+              <DataTable.Title numeric style={styles.productsColumn}>Pieces</DataTable.Title>
               <DataTable.Title numeric style={styles.ordersColumn}>Orders</DataTable.Title>
+              <DataTable.Title numeric style={styles.salesColumn}>Sales</DataTable.Title>
             </DataTable.Header>
 
             {report.salesmanPerformance.map((salesman, index) => (
@@ -406,11 +529,64 @@ ${report.topCustomers.map((customer, index) =>
                 <DataTable.Cell numeric style={styles.ordersColumn}>
                   <Text style={styles.salesmanOrders}>{salesman.totalOrders}</Text>
                 </DataTable.Cell>
+                <DataTable.Cell numeric style={styles.salesColumn}>
+                  <Text style={styles.salesmanSales}>₹{salesman.totalSales.toFixed(0)}</Text>
+                </DataTable.Cell>
               </DataTable.Row>
             ))}
           </DataTable>
           {report.salesmanPerformance.length === 0 && (
             <Text style={styles.emptyText}>No salesman data for this period</Text>
+          )}
+        </Card.Content>
+      </Card>
+
+      {/* Top 5 Workers */}
+      <Card style={styles.reportCard}>
+        <Card.Content>
+          <Text variant="titleLarge" style={styles.reportTitle}>
+            👥 Top 5 Salesman ({dateRange}ly)
+          </Text>
+          <DataTable>
+            <DataTable.Header>
+              <DataTable.Title style={styles.workerColumn}>Salesman</DataTable.Title>
+              <DataTable.Title style={styles.salesmanWorkerColumn}>Distributor</DataTable.Title>
+              <DataTable.Title numeric style={styles.productsColumn}>Pieces</DataTable.Title>
+              <DataTable.Title numeric style={styles.ordersColumn}>Orders</DataTable.Title>
+              <DataTable.Title numeric style={styles.salesColumn}>Sales</DataTable.Title>
+            </DataTable.Header>
+
+            {report.topWorkers.map((workerData, index) => (
+              <DataTable.Row key={workerData.worker.id || workerData.worker.uid}>
+                <DataTable.Cell style={styles.workerColumn}>
+                  <View>
+                    <Text style={styles.workerName}>
+                      {index + 1}. {workerData.worker.name}
+                    </Text>
+                    <Text style={styles.workerPhone}>
+                      {workerData.worker.phone || 'No phone'}
+                    </Text>
+                  </View>
+                </DataTable.Cell>
+                <DataTable.Cell style={styles.salesmanWorkerColumn}>
+                  <Text style={styles.workerSalesman}>
+                    {workerData.salesman?.name || 'Not assigned'}
+                  </Text>
+                </DataTable.Cell>
+                <DataTable.Cell numeric style={styles.productsColumn}>
+                  <Text style={styles.workerProducts}>{workerData.totalProductsSold}</Text>
+                </DataTable.Cell>
+                <DataTable.Cell numeric style={styles.ordersColumn}>
+                  <Text style={styles.workerOrders}>{workerData.totalOrders}</Text>
+                </DataTable.Cell>
+                <DataTable.Cell numeric style={styles.salesColumn}>
+                  <Text style={styles.workerSales}>₹{workerData.totalSales.toFixed(0)}</Text>
+                </DataTable.Cell>
+              </DataTable.Row>
+            ))}
+          </DataTable>
+          {report.topWorkers.length === 0 && (
+            <Text style={styles.emptyText}>No worker data for this period</Text>
           )}
         </Card.Content>
       </Card>
@@ -577,11 +753,17 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: scaleSize(18),
     fontWeight: 'bold',
-    color: '#F7CAC9',
+    color: '#4CAF50',
     marginBottom: scaleSize(4),
+    textAlign: 'center',
   },
   productsValue: {
     color: '#4CAF50',
+  },
+  topSalesmanValue: {
+    fontSize: scaleSize(14),
+    color: '#2196F3',
+    fontWeight: '700',
   },
   summaryLabel: {
     fontSize: scaleSize(11),
@@ -629,9 +811,12 @@ const styles = StyleSheet.create({
   salesmanColumn: { flex: 2 },
   productsColumn: { flex: 1 },
   ordersColumn: { flex: 1 },
+  salesColumn: { flex: 1.2 },
   customerColumn: { flex: 2 },
   locationColumn: { flex: 1.5 },
   piecesColumn: { flex: 1 },
+  workerColumn: { flex: 2 },
+  salesmanWorkerColumn: { flex: 1.5 },
   productName: {
     fontSize: scaleSize(12),
     color: '#3B3B3B',
@@ -670,6 +855,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#F7CAC9',
   },
+  salesmanSales: {
+    fontSize: scaleSize(12),
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
   customerName: {
     fontSize: scaleSize(14),
     color: '#3B3B3B',
@@ -693,11 +883,101 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#F7CAC9',
   },
+  workerName: {
+    fontSize: scaleSize(14),
+    color: '#3B3B3B',
+    fontWeight: '600',
+  },
+  workerPhone: {
+    fontSize: scaleSize(10),
+    color: '#A08B73',
+  },
+  workerSalesman: {
+    fontSize: scaleSize(11),
+    color: '#3B3B3B',
+  },
+  workerProducts: {
+    fontSize: scaleSize(12),
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  workerOrders: {
+    fontSize: scaleSize(12),
+    fontWeight: '600',
+    color: '#F7CAC9',
+  },
+  workerSales: {
+    fontSize: scaleSize(12),
+    fontWeight: '600',
+    color: '#4CAF50',
+  },
   emptyText: {
     textAlign: 'center',
     color: '#A08B73',
     fontStyle: 'italic',
     marginTop: scaleSize(8),
+  },
+  // Top Performer Styles
+  topPerformerCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFF9C4',
+    padding: scaleSize(16),
+    borderRadius: scaleSize(8),
+    borderColor: '#FFD700',
+    borderWidth: 2,
+  },
+  topPerformerInfo: {
+    flex: 1,
+  },
+  topPerformerName: {
+    fontSize: scaleSize(18),
+    fontWeight: 'bold',
+    color: '#3B3B3B',
+    marginBottom: scaleSize(4),
+  },
+  topPerformerRole: {
+    fontSize: scaleSize(12),
+    color: '#666',
+    marginBottom: scaleSize(12),
+  },
+  topPerformerStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: scaleSize(14),
+    fontWeight: 'bold',
+    color: '#2196F3',
+    marginBottom: scaleSize(2),
+  },
+  statLabel: {
+    fontSize: scaleSize(10),
+    color: '#666',
+  },
+  topPerformerBadge: {
+    backgroundColor: '#FFD700',
+    borderRadius: scaleSize(20),
+    width: scaleSize(60),
+    height: scaleSize(60),
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: scaleSize(8),
+  },
+  topPerformerRank: {
+    fontSize: scaleSize(18),
+    fontWeight: 'bold',
+    color: '#3B3B3B',
+  },
+  topPerformerTitle: {
+    fontSize: scaleSize(9),
+    color: '#3B3B3B',
+    textAlign: 'center',
+    marginTop: scaleSize(2),
   },
   // Order Status Breakdown Styles
   statusBreakdown: {

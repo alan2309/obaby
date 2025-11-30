@@ -223,6 +223,7 @@ const OrderManagement: React.FC = () => {
       // Use customerName and salesmanName from order data
       const customerName = order.customerName || getCustomerName(order.customerId) || 'Unknown Customer';
       const salesmanName = order.salesmanName || getSalesmanName(order.salesmanId) || 'Unknown Salesman';
+      const workerName = order.workerName || 'N/A';
 
       const htmlContent = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>
         body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;margin:20px;color:#333}
@@ -265,6 +266,7 @@ const OrderManagement: React.FC = () => {
           <div class="info-label">Sales Information</div>
           <div class="info-value">Salesman: ${salesmanName}</div>
           <div class="info-value">Customer: ${customerName}</div>
+          <div class="info-value">Customer: ${workerName}</div>
         </div>
       </div>
       <table class="table"><thead><tr><th>Product</th><th>Size & Color</th><th>Quantity</th><th>Delivered</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>
@@ -549,16 +551,16 @@ const OrderManagement: React.FC = () => {
                           Customer:
                         </Text>
                         <Text variant="bodySmall" style={styles.detailValue}>
-                          {getCustomerName(order.customerId)}
+                          {order.customerName}
                         </Text>
                       </View>
 
                       <View style={styles.detailRow}>
                         <Text variant="bodySmall" style={styles.detailLabel}>
-                          Salesman:
+                          Distributor:
                         </Text>
                         <Text variant="bodySmall" style={styles.detailValue}>
-                          {getSalesmanName(order.salesmanId)}
+                          {order.salesmanName}
                         </Text>
                       </View>
 
@@ -669,8 +671,9 @@ const OrderManagement: React.FC = () => {
 
               <View style={styles.modalSection}>
                 <Text variant="titleSmall">Customer & Salesman</Text>
-                <Text variant="bodyMedium">Customer: {getCustomerName(selectedOrder.customerId)}</Text>
-                <Text variant="bodyMedium">Salesman: {getSalesmanName(selectedOrder.salesmanId)}</Text>
+                <Text variant="bodyMedium">Customer: {selectedOrder.customerName}</Text>
+                <Text variant="bodyMedium">Distributor: {selectedOrder.salesmanName}</Text>
+                <Text variant="bodyMedium">Salesman: {selectedOrder.workerName}</Text>
                 <Text variant="bodyMedium">Total Amount: ₹{selectedOrder.totalAmount.toFixed(2)}</Text>
               </View>
 

@@ -180,7 +180,8 @@ const MyOrdersScreen: React.FC = () => {
 
     // Use customerName and salesmanName from order data
     const customerName = order.customerName || 'Unknown Customer';
-    const salesmanName = order.salesmanName || user?.name || 'Unknown Salesman';
+    const salesmanName = order.salesmanName || user?.name || 'Unknown Distributor';
+    const workerName = order.workerName || user?.name || 'Unknown Salesman';
 
     const htmlContent = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>
       body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;margin:20px;color:#333}
@@ -221,7 +222,8 @@ const MyOrdersScreen: React.FC = () => {
       </div>
       <div class="info-section">
         <div class="info-label">Sales Information</div>
-        <div class="info-value">Salesman: ${salesmanName}</div>
+        <div class="info-value">Distributor: ${salesmanName}</div>
+        <div class="info-value">Salesman: ${workerName}</div>
         <div class="info-value">Customer: ${customerName}</div>
       </div>
     </div>
@@ -363,6 +365,7 @@ const MyOrdersScreen: React.FC = () => {
 
       // Use customer name from order data
       const customerName = order.customerName || "Customer";
+      const workerName = order.workerName || user?.name || "Salesman";
 
       const orderDetails = items
         .map((item) => {
@@ -391,7 +394,7 @@ const MyOrdersScreen: React.FC = () => {
 
       const message = `Order #${(order.id ?? "")
         .toString()
-        .substring(0, 8)}\nCustomer: ${customerName}\nStatus: ${
+        .substring(0, 8)}\nCustomer: ${customerName}\nSalesman: ${workerName}\nStatus: ${
         order.status
       }\nDate: ${formatDate(
         order.createdAt
@@ -580,14 +583,6 @@ const MyOrdersScreen: React.FC = () => {
                                   numberOfLines={1}
                                 >
                                   {item.productName}
-                                </Text>
-                                <Text
-                                  variant="bodySmall"
-                                  style={styles.skuText}
-                                >
-                                  {(item.productId ?? "")
-                                    .toString()
-                                    .substring(0, 8)}
                                 </Text>
                               </DataTable.Cell>
                               <DataTable.Cell style={styles.tableCell}>

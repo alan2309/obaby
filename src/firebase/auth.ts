@@ -87,7 +87,8 @@ export const registerCustomer = async (
   name: string,
   phone: string,
   city: string,
-  salesmanId?: string
+  salesmanId?: string,
+  role: 'customer' | 'worker' = 'customer'
 ) => {
   try {
     // Generate custom ID for the customer (similar to salesman)
@@ -100,7 +101,7 @@ export const registerCustomer = async (
       name,
       phone,
       city,
-      role: USER_ROLES.CUSTOMER,
+      role: role === 'worker' ? USER_ROLES.WORKER : USER_ROLES.CUSTOMER,
       approved: true, // Customers need approval
       salesmanId: salesmanId || undefined,
       createdAt: new Date(),
@@ -109,14 +110,23 @@ export const registerCustomer = async (
     // Store with custom ID as document ID
     await setDoc(doc(firestore, COLLECTIONS.USERS, customId), userDoc);
     
-    console.log('✅ Customer created successfully with ID:', customId);
+     console.log(`✅ ${role === 'worker' ? 'Worker' : 'Customer'} created successfully with ID:`, customId);
     return userDoc;
   } catch (error: any) {
-    console.error('❌ Error creating customer:', error);
+    console.error(`❌ Error creating ${role === 'worker' ? 'worker' : 'customer'}:`, error);
     throw new Error(error.message);
   }
 };
 
+export const registerWorker = async (
+  email: string, 
+  name: string,
+  phone: string,
+  city: string,
+  salesmanId?: string
+) => {
+  return registerCustomer(email, name, phone, city, salesmanId, 'worker');
+};
 export const loginUser = async (email: string, password: string) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);

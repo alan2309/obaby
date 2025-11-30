@@ -1,3 +1,4 @@
+// src/screens/salesman/Workers.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -11,20 +12,20 @@ import {
   ScrollView,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { registerCustomer } from '../../firebase/auth';
-import { getCustomersBySalesman } from '../../firebase/firestore';
+import { registerWorker } from '../../firebase/auth';
+import { getWorkersBySalesman } from '../../firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { UserData } from '../../firebase/auth';
 import { USER_ROLES } from '../../utils/constants';
 
-const CustomersScreen: React.FC = () => {
-  const [customers, setCustomers] = useState<UserData[]>([]);
-  const [filteredCustomers, setFilteredCustomers] = useState<UserData[]>([]);
+const WorkersScreen: React.FC = () => {
+  const [workers, setWorkers] = useState<UserData[]>([]);
+  const [filteredWorkers, setFilteredWorkers] = useState<UserData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [newCustomer, setNewCustomer] = useState({
+  const [newWorker, setNewWorker] = useState({
     name: '',
     email: '',
     phone: '',
@@ -34,16 +35,16 @@ const CustomersScreen: React.FC = () => {
 
   const currentUser = getAuth().currentUser;
 
-  const loadCustomers = useCallback(async () => {
+  const loadWorkers = useCallback(async () => {
     if (!currentUser) return;
     
     try {
-      const customersData = await getCustomersBySalesman(currentUser.uid);
-      setCustomers(customersData);
-      setFilteredCustomers(customersData);
+      const workersData = await getWorkersBySalesman(currentUser.uid);
+      setWorkers(workersData);
+      setFilteredWorkers(workersData);
     } catch (error) {
-      console.error('Error loading customers:', error);
-      Alert.alert('Error', 'Failed to load customers');
+      console.error('Error loading workers:', error);
+      Alert.alert('Error', 'Failed to load workers');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -51,32 +52,32 @@ const CustomersScreen: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    loadCustomers();
-  }, [loadCustomers]);
+    loadWorkers();
+  }, [loadWorkers]);
 
-  // Filter customers based on search query
+  // Filter workers based on search query
   useEffect(() => {
     if (searchQuery.trim() === '') {
-      setFilteredCustomers(customers);
+      setFilteredWorkers(workers);
     } else {
       const query = searchQuery.toLowerCase();
-      const filtered = customers.filter(customer =>
-        (customer.name?.toLowerCase() || '').includes(query) ||
-        (customer.email?.toLowerCase() || '').includes(query) ||
-        (customer.phone || '').includes(query) ||
-        (customer.city?.toLowerCase() || '').includes(query)
+      const filtered = workers.filter(worker =>
+        (worker.name?.toLowerCase() || '').includes(query) ||
+        (worker.email?.toLowerCase() || '').includes(query) ||
+        (worker.phone || '').includes(query) ||
+        (worker.city?.toLowerCase() || '').includes(query)
       );
-      setFilteredCustomers(filtered);
+      setFilteredWorkers(filtered);
     }
-  }, [searchQuery, customers]);
+  }, [searchQuery, workers]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    loadCustomers();
+    loadWorkers();
   };
 
-  const handleCreateCustomer = async () => {
-    if (!newCustomer.name || !newCustomer.email || !newCustomer.phone || !newCustomer.city) {
+  const handleCreateWorker = async () => {
+    if (!newWorker.name || !newWorker.email || !newWorker.phone || !newWorker.city) {
       Alert.alert('Error', 'Please fill all fields');
       return;
     }
@@ -88,38 +89,37 @@ const CustomersScreen: React.FC = () => {
 
     setCreating(true);
     try {
-      await registerCustomer(
-        newCustomer.email,
-        newCustomer.name,
-        newCustomer.phone,
-        newCustomer.city,
-        currentUser.uid ,// salesmanId
-        USER_ROLES.CUSTOMER,
+      await registerWorker(
+        newWorker.email,
+        newWorker.name,
+        newWorker.phone,
+        newWorker.city,
+        currentUser.uid,
       );
 
-      Alert.alert('Success', 'Customer created successfully. They will appear in the system once approved.');
+      Alert.alert('Success', 'Salesman created successfully. They will appear in the system once approved.');
       
       // Reset form and close modal
-      setNewCustomer({ name: '', email: '', phone: '', city: '' });
+      setNewWorker({ name: '', email: '', phone: '', city: '' });
       setModalVisible(false);
       
       // Refresh the list
-      loadCustomers();
+      loadWorkers();
     } catch (error: any) {
-      console.error('Error creating customer:', error);
-      Alert.alert('Error', error.message || 'Failed to create customer');
+      console.error('Error creating Salesman:', error);
+      Alert.alert('Error', error.message || 'Failed to create salesman');
     } finally {
       setCreating(false);
     }
   };
 
-  const renderCustomerItem = ({ item }: { item: UserData }) => (
-    <View style={styles.customerCard}>
-      <View style={styles.customerInfo}>
-        <Text style={styles.customerName}>{item.name || 'No Name'}</Text>
-        <Text style={styles.customerDetail}>Email: {item.email || 'No Email'}</Text>
-        <Text style={styles.customerDetail}>Phone: {item.phone || 'No Phone'}</Text>
-        <Text style={styles.customerDetail}>City: {item.city || 'No City'}</Text>
+  const renderWorkerItem = ({ item }: { item: UserData }) => (
+    <View style={styles.workerCard}>
+      <View style={styles.workerInfo}>
+        <Text style={styles.workerName}>{item.name || 'No Name'}</Text>
+        <Text style={styles.workerDetail}>Email: {item.email || 'No Email'}</Text>
+        <Text style={styles.workerDetail}>Phone: {item.phone || 'No Phone'}</Text>
+        <Text style={styles.workerDetail}>City: {item.city || 'No City'}</Text>
         <View style={[
           styles.statusBadge,
           { backgroundColor: item.approved ? '#4CAF50' : '#FF9800' }
@@ -135,7 +135,7 @@ const CustomersScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <Text>Loading customers...</Text>
+        <Text>Loading workers...</Text>
       </View>
     );
   }
@@ -144,7 +144,7 @@ const CustomersScreen: React.FC = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>My Customers</Text>
+        <Text style={styles.title}>My Salesman</Text>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => setModalVisible(true)}
@@ -158,7 +158,7 @@ const CustomersScreen: React.FC = () => {
         <MaterialCommunityIcons name="magnify" size={20} color="#666" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search customers by name, email, phone, or city..."
+          placeholder="Search workers by name, email, phone, or city..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           clearButtonMode="while-editing"
@@ -174,7 +174,7 @@ const CustomersScreen: React.FC = () => {
       {searchQuery.length > 0 && (
         <View style={styles.searchInfo}>
           <Text style={styles.searchInfoText}>
-            {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} found for "{searchQuery}"
+            {filteredWorkers.length} Salesman{filteredWorkers.length !== 1 ? 's' : ''} found for "{searchQuery}"
           </Text>
           <TouchableOpacity onPress={() => setSearchQuery('')}>
             <Text style={styles.clearSearchText}>Clear</Text>
@@ -182,10 +182,10 @@ const CustomersScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Customers List */}
+      {/* Workers List */}
       <FlatList
-        data={filteredCustomers}
-        renderItem={renderCustomerItem}
+        data={filteredWorkers}
+        renderItem={renderWorkerItem}
         keyExtractor={(item) => item.id || item.uid || Math.random().toString()}
         contentContainerStyle={styles.listContent}
         refreshing={refreshing}
@@ -193,17 +193,17 @@ const CustomersScreen: React.FC = () => {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <MaterialCommunityIcons 
-              name={searchQuery ? "account-search" : "account-group"} 
+              name={searchQuery ? "account-search" : "account-hard-hat"} 
               size={64} 
               color="#CCC" 
             />
             <Text style={styles.emptyText}>
-              {searchQuery ? 'No customers found' : 'No customers found'}
+              {searchQuery ? 'No workers found' : 'No workers found'}
             </Text>
             <Text style={styles.emptySubText}>
               {searchQuery 
                 ? 'Try adjusting your search terms'
-                : 'Add your first customer to get started'
+                : 'Add your first Salesman to get started'
               }
             </Text>
             {!searchQuery && (
@@ -212,7 +212,7 @@ const CustomersScreen: React.FC = () => {
                 onPress={() => setModalVisible(true)}
               >
                 <MaterialCommunityIcons name="plus" size={20} color="#FFF" />
-                <Text style={styles.createButtonEmptyText}>Create Your First Customer</Text>
+                <Text style={styles.createButtonEmptyText}>Create Your First Salesman</Text>
               </TouchableOpacity>
             )}
             {searchQuery && (
@@ -227,7 +227,7 @@ const CustomersScreen: React.FC = () => {
         }
       />
 
-      {/* Create Customer Modal */}
+      {/* Create Worker Modal */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -237,7 +237,7 @@ const CustomersScreen: React.FC = () => {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New Customer</Text>
+              <Text style={styles.modalTitle}>Add New Salesman</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <MaterialCommunityIcons name="close" size={24} color="#000" />
               </TouchableOpacity>
@@ -247,16 +247,16 @@ const CustomersScreen: React.FC = () => {
               <Text style={styles.label}>Full Name *</Text>
               <TextInput
                 style={styles.input}
-                value={newCustomer.name}
-                onChangeText={(text) => setNewCustomer(prev => ({ ...prev, name: text }))}
-                placeholder="Enter customer name"
+                value={newWorker.name}
+                onChangeText={(text) => setNewWorker(prev => ({ ...prev, name: text }))}
+                placeholder="Enter salesmen name"
               />
 
               <Text style={styles.label}>Email *</Text>
               <TextInput
                 style={styles.input}
-                value={newCustomer.email}
-                onChangeText={(text) => setNewCustomer(prev => ({ ...prev, email: text }))}
+                value={newWorker.email}
+                onChangeText={(text) => setNewWorker(prev => ({ ...prev, email: text }))}
                 placeholder="Enter email address"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -265,8 +265,8 @@ const CustomersScreen: React.FC = () => {
               <Text style={styles.label}>Phone *</Text>
               <TextInput
                 style={styles.input}
-                value={newCustomer.phone}
-                onChangeText={(text) => setNewCustomer(prev => ({ ...prev, phone: text }))}
+                value={newWorker.phone}
+                onChangeText={(text) => setNewWorker(prev => ({ ...prev, phone: text }))}
                 placeholder="Enter phone number"
                 keyboardType="phone-pad"
               />
@@ -274,10 +274,11 @@ const CustomersScreen: React.FC = () => {
               <Text style={styles.label}>City *</Text>
               <TextInput
                 style={styles.input}
-                value={newCustomer.city}
-                onChangeText={(text) => setNewCustomer(prev => ({ ...prev, city: text }))}
+                value={newWorker.city}
+                onChangeText={(text) => setNewWorker(prev => ({ ...prev, city: text }))}
                 placeholder="Enter city"
               />
+
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.button, styles.cancelButton]}
@@ -288,11 +289,11 @@ const CustomersScreen: React.FC = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.button, styles.createButton, creating && styles.disabledButton]}
-                  onPress={handleCreateCustomer}
+                  onPress={handleCreateWorker}
                   disabled={creating}
                 >
                   <Text style={styles.createButtonText}>
-                    {creating ? 'Creating...' : 'Create Customer'}
+                    {creating ? 'Creating...' : 'Create Salesman'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -375,7 +376,7 @@ const styles = StyleSheet.create({
     padding: 16,
     flexGrow: 1,
   },
-  customerCard: {
+  workerCard: {
     backgroundColor: '#FFF',
     padding: 16,
     borderRadius: 8,
@@ -386,16 +387,16 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  customerInfo: {
+  workerInfo: {
     flex: 1,
   },
-  customerName: {
+  workerName: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 4,
     color: '#333',
   },
-  customerDetail: {
+  workerDetail: {
     fontSize: 14,
     color: '#666',
     marginBottom: 2,
@@ -539,4 +540,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CustomersScreen;
+export default WorkersScreen;
